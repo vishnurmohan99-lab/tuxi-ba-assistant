@@ -52,7 +52,7 @@ export default function StoryInputList({ stories, onChange }: Props) {
               border: `1px solid ${isEmpty && !isLast ? 'var(--border)' : story.name ? 'var(--accent)' : 'var(--border)'}`,
               borderRadius: 'var(--radius)',
               padding: '14px',
-              background: 'var(--surface-2)',
+              background: 'var(--surface)',
               transition: 'border-color 0.2s',
               opacity: isLast && index > 0 && !story.name ? 0.6 : 1,
             }}
