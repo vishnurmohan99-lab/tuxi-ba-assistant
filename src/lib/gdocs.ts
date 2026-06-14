@@ -68,7 +68,7 @@ function findFeatureHeading(doc: any, featureName: string): number | null {
           .replace(/\n/g, '')
           .trim();
         if (text?.toLowerCase() === featureName.toLowerCase()) {
-          return element.endIndex;
+          return element.endIndex ?? null;
         }
       }
     }
@@ -79,7 +79,7 @@ function findFeatureHeading(doc: any, featureName: string): number | null {
 function getDocEndIndex(doc: any): number {
   const content = doc.body?.content || [];
   if (content.length === 0) return 1;
-  return content[content.length - 1].endIndex - 1;
+  return (content[content.length - 1].endIndex ?? 1) - 1;
 }
 
 // ── Append a user story under a feature tab ──────────────────
@@ -172,7 +172,7 @@ export async function appendStoryToDoc(
         }
 
         if (foundFeature && style === 'HEADING_1') {
-          insertAt = element.startIndex;
+          insertAt = element.startIndex ?? endIndex;
           break;
         }
       }
