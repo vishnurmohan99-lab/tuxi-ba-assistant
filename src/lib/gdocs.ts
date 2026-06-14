@@ -1,5 +1,7 @@
 import { google } from 'googleapis';
 
+const FOLDER_ID = '1KuWc9UIUzmT5eUGrLaz3jXbCG28JQx4O';
+
 function getAuth() {
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
   return new google.auth.JWT({
@@ -17,13 +19,12 @@ function getAuth() {
 export async function getOrCreateDoc(): Promise<string> {
   const auth = getAuth();
   const drive = google.drive({ version: 'v3', auth });
-  const docs = google.docs({ version: 'v1', auth });
 
   const DOC_NAME = 'Tuxi BA - User Stories';
 
-  // Search for existing doc
+  // Search for existing doc inside the shared folder
   const search = await drive.files.list({
-    q: `name='${DOC_NAME}' and mimeType='application/vnd.google-apps.document' and trashed=false`,
+    q: `name='${DOC_NAME}' and mimeType='application/vnd.google-apps.document' and '${FOLDER_ID}' in parents and trashed=false`,
     fields: 'files(id, name)',
   });
 
@@ -31,20 +32,17 @@ export async function getOrCreateDoc(): Promise<string> {
     return search.data.files[0].id!;
   }
 
-  // Create new doc
-  const doc = await docs.documents.create({
-    requestBody: { title: DOC_NAME },
+  // Create new doc inside the shared folder
+  const file = await drive.files.create({
+    requestBody: {
+      name: DOC_NAME,
+      mimeType: 'application/vnd.google-apps.document',
+      parents: [FOLDER_ID],
+    },
+    fields: 'id',
   });
 
-  const docId = doc.data.documentId!;
-
-  // Share with anyone who has the link (optional — makes it easy to access)
-  await drive.permissions.create({
-    fileId: docId,
-    requestBody: { role: 'writer', type: 'user', emailAddress: process.env.GOOGLE_CLIENT_EMAIL! },
-  });
-
-  return docId;
+  return file.data.id!;
 }
 
 // ── Check if a feature heading exists in the doc ─────────────
@@ -103,19 +101,13 @@ export async function appendStoryToDoc(
     // Feature doesn't exist — add new HEADING_1 section at end
     const insertIndex = endIndex > 1 ? endIndex : 1;
 
-    // Add page break before new feature (except if doc is empty)
     if (endIndex > 1) {
-      requests.push({
-        insertPageBreak: { location: { index: insertIndex } },
-      });
+      requests.push({ insertPageBreak: { location: { index: insertIndex } } });
     }
 
     const afterBreak = endIndex > 1 ? insertIndex + 1 : insertIndex;
 
-    // Feature heading
-    requests.push({
-      insertText: { location: { index: afterBreak }, text: `${featureName}\n` },
-    });
+    requests.push({ insertText: { location: { index: afterBreak }, text: `${featureName}\n` } });
     requests.push({
       updateParagraphStyle: {
         range: { startIndex: afterBreak, endIndex: afterBreak + featureName.length + 1 },
@@ -124,11 +116,8 @@ export async function appendStoryToDoc(
       },
     });
 
-    // Story title as HEADING_2
     const storyTitleIndex = afterBreak + featureName.length + 1;
-    requests.push({
-      insertText: { location: { index: storyTitleIndex }, text: `${storyTitle}\n` },
-    });
+    requests.push({ insertText: { location: { index: storyTitleIndex }, text: `${storyTitle}\n` } });
     requests.push({
       updateParagraphStyle: {
         range: { startIndex: storyTitleIndex, endIndex: storyTitleIndex + storyTitle.length + 1 },
@@ -137,11 +126,8 @@ export async function appendStoryToDoc(
       },
     });
 
-    // Story content
     const contentIndex = storyTitleIndex + storyTitle.length + 1;
-    requests.push({
-      insertText: { location: { index: contentIndex }, text: `${storyContent}\n\n` },
-    });
+    requests.push({ insertText: { location: { index: contentIndex }, text: `${storyContent}\n\n` } });
     requests.push({
       updateParagraphStyle: {
         range: { startIndex: contentIndex, endIndex: contentIndex + storyContent.length + 2 },
@@ -151,12 +137,10 @@ export async function appendStoryToDoc(
     });
 
   } else {
-    // Feature exists — find next heading or end of doc to insert story after feature
     const content = doc.body?.content || [];
     let insertAt = endIndex;
-
-    // Find the position just before the next HEADING_1 after this feature
     let foundFeature = false;
+
     for (const element of content) {
       if (element.paragraph) {
         const style = element.paragraph.paragraphStyle?.namedStyleType;
@@ -178,10 +162,7 @@ export async function appendStoryToDoc(
       }
     }
 
-    // Insert story title as HEADING_2
-    requests.push({
-      insertText: { location: { index: insertAt }, text: `${storyTitle}\n` },
-    });
+    requests.push({ insertText: { location: { index: insertAt }, text: `${storyTitle}\n` } });
     requests.push({
       updateParagraphStyle: {
         range: { startIndex: insertAt, endIndex: insertAt + storyTitle.length + 1 },
@@ -190,11 +171,8 @@ export async function appendStoryToDoc(
       },
     });
 
-    // Story content
     const contentIndex = insertAt + storyTitle.length + 1;
-    requests.push({
-      insertText: { location: { index: contentIndex }, text: `${storyContent}\n\n` },
-    });
+    requests.push({ insertText: { location: { index: contentIndex }, text: `${storyContent}\n\n` } });
     requests.push({
       updateParagraphStyle: {
         range: { startIndex: contentIndex, endIndex: contentIndex + storyContent.length + 2 },
