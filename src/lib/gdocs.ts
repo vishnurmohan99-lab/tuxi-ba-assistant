@@ -47,18 +47,12 @@ export async function getOrCreateDoc(): Promise<string> {
   return file.data.id!;
 }
 
-// ── Parse story content into structured fields ───────────────
+// ── Parse story into structured fields ───────────────────────
 
-function parseStory(storyContent: string): {
-  storyId: string;
-  asA: string;
-  description: string;
-  acceptanceCriteria: string;
-} {
-  // Extract "As a X, I want Y, So that Z"
-  const asAMatch = storyContent.match(/As a (.+?)[\n\r]/i);
-  const iWantMatch = storyContent.match(/I want to (.+?)[\n\r]/i);
-  const soThatMatch = storyContent.match(/So that (.+?)[\n\r]/i);
+function parseStory(storyContent: string, featureName: string, storyTitle: string) {
+  const asAMatch = storyContent.match(/As a\s+(.+)/i);
+  const iWantMatch = storyContent.match(/I want to\s+(.+)/i);
+  const soThatMatch = storyContent.match(/So that\s+(.+)/i);
 
   const asA = [
     asAMatch ? `As a ${asAMatch[1].trim()},` : '',
@@ -66,23 +60,38 @@ function parseStory(storyContent: string): {
     soThatMatch ? `So that ${soThatMatch[1].trim()}.` : '',
   ].filter(Boolean).join(' ');
 
-  // Extract acceptance criteria section
-  const acMatch = storyContent.match(/Acceptance Criteria[\s\S]*?(?=Edge Cases|$)/i);
-  const acRaw = acMatch ? acMatch[0].replace(/Acceptance Criteria/i, '').trim() : '';
+  // Get acceptance criteria section
+  const acMatch = storyContent.match(/Acceptance Criteria([\s\S]*?)(?=Edge Cases|$)/i);
+  const acText = acMatch ? acMatch[1].trim() : '';
 
-  // Extract edge cases and append to acceptance criteria
-  const edgeMatch = storyContent.match(/Edge Cases[\s\S]*$/i);
-  const edgeRaw = edgeMatch ? edgeMatch[0].trim() : '';
+  // Get edge cases
+  const edgeMatch = storyContent.match(/Edge Cases([\s\S]*?)$/i);
+  const edgeText = edgeMatch ? edgeMatch[1].trim() : '';
 
-  const acceptanceCriteria = [acRaw, edgeRaw].filter(Boolean).join('\n\n');
+  const acceptanceCriteria = [acText, edgeText ? `Edge Cases:\n${edgeText}` : ''].filter(Boolean).join('\n\n');
 
-  // Generate story ID from title
-  const storyId = 'US-' + Math.floor(Math.random() * 900 + 100);
+  // Description = everything before acceptance criteria
+  const descMatch = storyContent.match(/So that[^\n]*\n([\s\S]*?)(?=---|\nAcceptance Criteria|$)/i);
+  const description = descMatch ? descMatch[1].trim() : `${featureName} - ${storyTitle}`;
 
-  return { storyId, asA, description: acRaw, acceptanceCriteria };
+  const storyId = `US-${Math.floor(Math.random() * 900 + 100)}`;
+
+  return { storyId, asA, description, acceptanceCriteria };
 }
 
-// ── Append a user story as a formatted table ─────────────────
+// ── Get safe end index ───────────────────────────────────────
+
+async function getSafeEndIndex(docId: string, docs: any): Promise<number> {
+  const res = await docs.documents.get({ documentId: docId });
+  const content = res.data.body?.content || [];
+  if (content.length === 0) return 1;
+  const lastEl = content[content.length - 1];
+  const endIdx = lastEl.endIndex ?? 2;
+  // Return index of last character (before the final newline)
+  return Math.max(1, endIdx - 1);
+}
+
+// ── Append story as formatted table ─────────────────────────
 
 export async function appendStoryToDoc(
   featureName: string,
@@ -91,133 +100,157 @@ export async function appendStoryToDoc(
 ): Promise<string> {
   const auth = getAuth();
   const docs = google.docs({ version: 'v1', auth });
-
   const docId = await getOrCreateDoc();
 
-  // Get current doc to find end index
-  const docRes = await docs.documents.get({ documentId: docId });
-  const content = docRes.data.body?.content || [];
-  const endIndex = content.length > 0
-    ? (content[content.length - 1].endIndex ?? 2) - 1
-    : 1;
+  const { storyId, asA, description, acceptanceCriteria } = parseStory(storyContent, featureName, storyTitle);
 
-  const { storyId, asA, acceptanceCriteria } = parseStory(storyContent);
+  // Step 1: Get current end index
+  let endIdx = await getSafeEndIndex(docId, docs);
 
-  const requests: any[] = [];
-  let idx = endIndex;
+  // Step 2: Insert title heading
+  const titleText = `User Story: ${featureName} - ${storyTitle}`;
 
-  // Add spacing if not empty doc
-  if (endIndex > 1) {
-    requests.push({ insertText: { location: { index: idx }, text: '\n' } });
-    idx += 1;
+  // Insert newline first if doc has content
+  if (endIdx > 1) {
+    await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: {
+        requests: [
+          { insertText: { location: { index: endIdx }, text: '\n' } },
+        ],
+      },
+    });
+    endIdx += 1;
   }
 
-  // Title line: "User Story: <Feature> - <StoryTitle>"
-  const titleText = `User Story: ${featureName} - ${storyTitle}\n`;
-  requests.push({ insertText: { location: { index: idx }, text: titleText } });
-  requests.push({
-    updateParagraphStyle: {
-      range: { startIndex: idx, endIndex: idx + titleText.length },
-      paragraphStyle: { namedStyleType: 'HEADING_2' },
-      fields: 'namedStyleType',
-    },
-  });
-  idx += titleText.length;
-
-  // Insert a 4-row x 2-col table
-  requests.push({
-    insertTable: {
-      rows: 4,
-      columns: 2,
-      location: { index: idx },
-    },
-  });
-
-  // Execute all so far to get the table in place
+  // Insert title text
   await docs.documents.batchUpdate({
     documentId: docId,
-    requestBody: { requests },
+    requestBody: {
+      requests: [
+        { insertText: { location: { index: endIdx }, text: titleText + '\n' } },
+      ],
+    },
   });
 
-  // Now get the updated doc to find table cell indices
+  // Style title as Heading 2
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [
+        {
+          updateParagraphStyle: {
+            range: { startIndex: endIdx, endIndex: endIdx + titleText.length + 1 },
+            paragraphStyle: { namedStyleType: 'HEADING_2' },
+            fields: 'namedStyleType',
+          },
+        },
+      ],
+    },
+  });
+
+  // Step 3: Get new end index after title
+  endIdx = await getSafeEndIndex(docId, docs);
+
+  // Step 4: Insert table at end
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [
+        {
+          insertTable: {
+            rows: 4,
+            columns: 2,
+            location: { index: endIdx },
+          },
+        },
+      ],
+    },
+  });
+
+  // Step 5: Get updated doc with table
   const updatedDoc = await docs.documents.get({ documentId: docId });
   const updatedContent = updatedDoc.data.body?.content || [];
 
-  // Find the table we just inserted
-  let tableElement: any = null;
+  // Find last table in doc
+  let tableEl: any = null;
   for (const el of updatedContent) {
-    if (el.table && el.startIndex && el.startIndex >= idx) {
-      tableElement = el;
-      break;
-    }
+    if (el.table) tableEl = el;
   }
 
-  // Also search near our insert point
-  if (!tableElement) {
-    for (const el of updatedContent) {
-      if (el.table) {
-        tableElement = el;
-      }
-    }
-  }
-
-  if (!tableElement) {
+  if (!tableEl) {
     return `https://docs.google.com/document/d/${docId}/edit`;
   }
 
-  const tableRows = tableElement.table?.tableRows || [];
-  const cellRequests: any[] = [];
+  const rows = tableEl.table?.tableRows || [];
 
-  // Helper to get cell content index
-  function getCellIndex(rowIdx: number, colIdx: number): number {
-    const cell = tableRows[rowIdx]?.tableCells?.[colIdx];
-    const cellContent = cell?.content?.[0];
-    return cellContent?.startIndex ?? 0;
+  // Helper: get first content index of a cell
+  function cellIdx(row: number, col: number): number {
+    return rows[row]?.tableCells?.[col]?.content?.[0]?.startIndex ?? 0;
   }
 
-  // Row 0: Story ID | As a... statement
-  const r0c0 = getCellIndex(0, 0);
-  const r0c1 = getCellIndex(0, 1);
+  // Step 6: Fill cells one at a time in REVERSE order to preserve indices
+  const cellData = [
+    { row: 3, col: 1, text: 'The user story meets all defined acceptance criteria. All test cases have passed successfully. QA Status: Pending.' },
+    { row: 3, col: 0, text: 'TEST REPORT' },
+    { row: 2, col: 1, text: acceptanceCriteria || 'See story content.' },
+    { row: 2, col: 0, text: 'Acceptance criteria' },
+    { row: 1, col: 1, text: description },
+    { row: 1, col: 0, text: 'Description' },
+    { row: 0, col: 1, text: asA },
+    { row: 0, col: 0, text: storyId },
+  ];
 
-  cellRequests.push({ insertText: { location: { index: r0c0 + 1 }, text: storyId } });
-  cellRequests.push({
-    updateTextStyle: {
-      range: { startIndex: r0c0 + 1, endIndex: r0c0 + 1 + storyId.length },
-      textStyle: { bold: true, foregroundColor: { color: { rgbColor: { red: 0, green: 0.5, blue: 0 } } } },
-      fields: 'bold,foregroundColor',
-    },
-  });
-  cellRequests.push({ insertText: { location: { index: r0c1 + 1 }, text: asA } });
+  for (const cell of cellData) {
+    const idx = cellIdx(cell.row, cell.col);
+    if (idx <= 0) continue;
 
-  // Row 1: Description label | Story content summary
-  const r1c0 = getCellIndex(1, 0);
-  const r1c1 = getCellIndex(1, 1);
-  const descText = storyContent.split('---')[0].replace(/Title:.*\n/i, '').replace(/As a[\s\S]*?So that[^\n]*/i, '').trim();
-
-  cellRequests.push({ insertText: { location: { index: r1c0 + 1 }, text: 'Description' } });
-  cellRequests.push({ insertText: { location: { index: r1c1 + 1 }, text: descText || storyContent.slice(0, 300) } });
-
-  // Row 2: Acceptance Criteria label | criteria content
-  const r2c0 = getCellIndex(2, 0);
-  const r2c1 = getCellIndex(2, 1);
-
-  cellRequests.push({ insertText: { location: { index: r2c0 + 1 }, text: 'Acceptance criteria' } });
-  cellRequests.push({ insertText: { location: { index: r2c1 + 1 }, text: acceptanceCriteria || 'See story content.' } });
-
-  // Row 3: TEST REPORT label | status
-  const r3c0 = getCellIndex(3, 0);
-  const r3c1 = getCellIndex(3, 1);
-
-  cellRequests.push({ insertText: { location: { index: r3c0 + 1 }, text: 'TEST REPORT' } });
-  cellRequests.push({ insertText: { location: { index: r3c1 + 1 }, text: 'The user story meets all defined acceptance criteria. All test cases have passed successfully. QA Status: Pending.' } });
-
-  // Execute cell content requests in reverse order to preserve indices
-  cellRequests.reverse();
-  for (const req of cellRequests) {
     await docs.documents.batchUpdate({
       documentId: docId,
-      requestBody: { requests: [req] },
+      requestBody: {
+        requests: [
+          { insertText: { location: { index: idx + 1 }, text: cell.text } },
+        ],
+      },
     });
+  }
+
+  // Step 7: Style story ID cell green + bold
+  // Re-fetch to get updated indices
+  const finalDoc = await docs.documents.get({ documentId: docId });
+  const finalContent = finalDoc.data.body?.content || [];
+  let finalTable: any = null;
+  for (const el of finalContent) {
+    if (el.table) finalTable = el;
+  }
+
+  if (finalTable) {
+    const finalRows = finalTable.table?.tableRows || [];
+    const idCell = finalRows[0]?.tableCells?.[0];
+    const idContent = idCell?.content?.[0];
+    if (idContent) {
+      const idStart = idContent.startIndex + 1;
+      const idEnd = idStart + storyId.length;
+      await docs.documents.batchUpdate({
+        documentId: docId,
+        requestBody: {
+          requests: [
+            {
+              updateTextStyle: {
+                range: { startIndex: idStart, endIndex: idEnd },
+                textStyle: {
+                  bold: true,
+                  foregroundColor: {
+                    color: { rgbColor: { red: 0, green: 0.5, blue: 0 } },
+                  },
+                },
+                fields: 'bold,foregroundColor',
+              },
+            },
+          ],
+        },
+      });
+    }
   }
 
   return `https://docs.google.com/document/d/${docId}/edit`;
