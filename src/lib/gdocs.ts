@@ -44,61 +44,26 @@ export async function getOrCreateDoc(): Promise<string> {
   return file.data.id!;
 }
 
-function parseStory(storyContent: string, featureName: string, storyTitle: string) {
+function parseStory(storyContent: string) {
   const asAMatch = storyContent.match(/As a\s+(.+)/i);
   const iWantMatch = storyContent.match(/I want to\s+(.+)/i);
   const soThatMatch = storyContent.match(/So that\s+(.+)/i);
 
   const asA = [
-    asAMatch ? `As a ${asAMatch[1].trim()},` : '',
-    iWantMatch ? `I want to ${iWantMatch[1].trim()},` : '',
-    soThatMatch ? `So that ${soThatMatch[1].trim()}.` : '',
-  ].filter(Boolean).join(' ');
+    asAMatch ? `As a ${asAMatch[1].trim()}` : '',
+    iWantMatch ? `I want to ${iWantMatch[1].trim()}` : '',
+    soThatMatch ? `So that ${soThatMatch[1].trim()}` : '',
+  ].filter(Boolean).join(', ');
 
   const acMatch = storyContent.match(/Acceptance Criteria([\s\S]*?)(?=Edge Cases|$)/i);
   const acText = acMatch ? acMatch[1].trim() : '';
+
   const edgeMatch = storyContent.match(/Edge Cases([\s\S]*?)$/i);
   const edgeText = edgeMatch ? edgeMatch[1].trim() : '';
-  const acceptanceCriteria = [acText, edgeText ? `Edge Cases:\n${edgeText}` : ''].filter(Boolean).join('\n\n');
+
   const storyId = `US-${Math.floor(Math.random() * 900 + 100)}`;
 
-  return { storyId, asA, acceptanceCriteria };
-}
-
-// Insert text at end of doc safely
-async function insertAtEnd(docId: string, docs: any, text: string) {
-  await docs.documents.batchUpdate({
-    documentId: docId,
-    requestBody: {
-      requests: [{
-        insertText: {
-          endOfSegmentLocation: { segmentId: '' },
-          text,
-        },
-      }],
-    },
-  });
-}
-
-// Style the last N characters from end of doc
-async function styleLastChars(docId: string, docs: any, charCount: number, namedStyle: string) {
-  const res = await docs.documents.get({ documentId: docId });
-  const content = res.data.body?.content || [];
-  const endIndex = (content[content.length - 1]?.endIndex ?? 2) - 1;
-  const startIndex = Math.max(1, endIndex - charCount);
-
-  await docs.documents.batchUpdate({
-    documentId: docId,
-    requestBody: {
-      requests: [{
-        updateParagraphStyle: {
-          range: { startIndex, endIndex },
-          paragraphStyle: { namedStyleType: namedStyle },
-          fields: 'namedStyleType',
-        },
-      }],
-    },
-  });
+  return { storyId, asA, acText, edgeText };
 }
 
 export async function appendStoryToDoc(
@@ -110,118 +75,77 @@ export async function appendStoryToDoc(
   const docs = google.docs({ version: 'v1', auth });
   const docId = await getOrCreateDoc();
 
-  const { storyId, asA, acceptanceCriteria } = parseStory(storyContent, featureName, storyTitle);
+  const { storyId, asA, acText, edgeText } = parseStory(storyContent);
 
-  // Check if doc has existing content
-  const docRes = await docs.documents.get({ documentId: docId });
-  const docContent = docRes.data.body?.content || [];
-  const hasContent = docContent.length > 1;
+  // Build the full formatted text block
+  const separator = '\n' + '─'.repeat(60) + '\n\n';
+  const block = [
+    `User Story: ${featureName} - ${storyTitle}`,
+    `Story ID: ${storyId}`,
+    ``,
+    `${asA}`,
+    ``,
+    `DESCRIPTION`,
+    storyContent.split('---')[0].replace(/Title:.*\n/i, '').replace(/As a[\s\S]*?So that[^\n]*/i, '').trim(),
+    ``,
+    `ACCEPTANCE CRITERIA`,
+    acText,
+    edgeText ? `\nEDGE CASES\n${edgeText}` : '',
+    ``,
+    `TEST REPORT`,
+    `QA Status: Pending — All test cases to be verified against acceptance criteria.`,
+    ``,
+    separator,
+  ].filter((line) => line !== null).join('\n');
 
-  // Add separator if doc already has content
-  if (hasContent) {
-    await insertAtEnd(docId, docs, '\n\n');
-  }
-
-  // Insert title
-  const titleText = `User Story: ${featureName} - ${storyTitle}\n`;
-  await insertAtEnd(docId, docs, titleText);
-
-  // Style title as Heading 2
-  await styleLastChars(docId, docs, titleText.length, 'HEADING_2');
-
-  // Insert table
-  const docAfterTitle = await docs.documents.get({ documentId: docId });
-  const contentAfterTitle = docAfterTitle.data.body?.content || [];
-  const insertTableAt = (contentAfterTitle[contentAfterTitle.length - 1]?.endIndex ?? 2) - 1;
-
+  // Insert at end of document
   await docs.documents.batchUpdate({
     documentId: docId,
     requestBody: {
-      requests: [{
-        insertTable: {
-          rows: 4,
-          columns: 2,
-          location: { index: insertTableAt },
+      requests: [
+        {
+          insertText: {
+            endOfSegmentLocation: { segmentId: '' },
+            text: block,
+          },
         },
-      }],
+      ],
     },
   });
 
-  // Get table cell indices
-  const docWithTable = await docs.documents.get({ documentId: docId });
-  const tableContent = docWithTable.data.body?.content || [];
+  // Now style the title as Heading 2
+  const updatedDoc = await docs.documents.get({ documentId: docId });
+  const content = updatedDoc.data.body?.content || [];
 
-  // Find last table
-  let tableEl: any = null;
-  for (const el of tableContent) {
-    if (el.table) tableEl = el;
-  }
-
-  if (!tableEl) return `https://docs.google.com/document/d/${docId}/edit`;
-
-  const rows = tableEl.table?.tableRows || [];
-
-  function cellStartIndex(row: number, col: number): number {
-    return rows[row]?.tableCells?.[col]?.content?.[0]?.startIndex ?? 0;
-  }
-
-  // Fill cells in REVERSE order to preserve indices
-  const cells = [
-    { row: 3, col: 1, text: 'The user story meets all defined acceptance criteria. All test cases have passed successfully. QA Status: Pending.' },
-    { row: 3, col: 0, text: 'TEST REPORT' },
-    { row: 2, col: 1, text: acceptanceCriteria || 'See story content.' },
-    { row: 2, col: 0, text: 'Acceptance criteria' },
-    { row: 1, col: 1, text: storyContent },
-    { row: 1, col: 0, text: 'Description' },
-    { row: 0, col: 1, text: asA },
-    { row: 0, col: 0, text: storyId },
-  ];
-
-  for (const cell of cells) {
-    const idx = cellStartIndex(cell.row, cell.col);
-    if (idx <= 0) continue;
-    await docs.documents.batchUpdate({
-      documentId: docId,
-      requestBody: {
-        requests: [{
-          insertText: {
-            location: { index: idx + 1 },
-            text: cell.text,
-          },
-        }],
-      },
-    });
-  }
-
-  // Style story ID green + bold
-  const finalDoc = await docs.documents.get({ documentId: docId });
-  const finalContent = finalDoc.data.body?.content || [];
-  let finalTable: any = null;
-  for (const el of finalContent) {
-    if (el.table) finalTable = el;
-  }
-
-  if (finalTable) {
-    const finalRows = finalTable.table?.tableRows || [];
-    const idCellContent = finalRows[0]?.tableCells?.[0]?.content?.[0];
-    if (idCellContent) {
-      const idStart = idCellContent.startIndex + 1;
-      const idEnd = idStart + storyId.length;
-      await docs.documents.batchUpdate({
-        documentId: docId,
-        requestBody: {
-          requests: [{
-            updateTextStyle: {
-              range: { startIndex: idStart, endIndex: idEnd },
-              textStyle: {
-                bold: true,
-                foregroundColor: { color: { rgbColor: { red: 0, green: 0.5, blue: 0 } } },
+  // Find the title line we just inserted
+  const titleText = `User Story: ${featureName} - ${storyTitle}`;
+  for (const el of content) {
+    if (el.paragraph) {
+      const text = el.paragraph.elements
+        ?.map((e: any) => e.textRun?.content || '')
+        .join('')
+        .replace(/\n/g, '')
+        .trim();
+      if (text === titleText) {
+        await docs.documents.batchUpdate({
+          documentId: docId,
+          requestBody: {
+            requests: [
+              {
+                updateParagraphStyle: {
+                  range: {
+                    startIndex: el.startIndex,
+                    endIndex: el.endIndex,
+                  },
+                  paragraphStyle: { namedStyleType: 'HEADING_2' },
+                  fields: 'namedStyleType',
+                },
               },
-              fields: 'bold,foregroundColor',
-            },
-          }],
-        },
-      });
+            ],
+          },
+        });
+        break;
+      }
     }
   }
 
