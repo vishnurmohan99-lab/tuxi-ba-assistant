@@ -81,16 +81,23 @@ async function insertAtEnd(docId: string, docs: any, text: string) {
 }
 
 // Style the last N characters from end of doc
-async function styleLastChars(docId: string, docs: any, charCount: number, style: any) {
+async function styleLastChars(docId: string, docs: any, charCount: number, namedStyle: string) {
   const res = await docs.documents.get({ documentId: docId });
   const content = res.data.body?.content || [];
   const endIndex = (content[content.length - 1]?.endIndex ?? 2) - 1;
-  const startIndex = endIndex - charCount;
-  if (startIndex < 1) return;
+  const startIndex = Math.max(1, endIndex - charCount);
 
   await docs.documents.batchUpdate({
     documentId: docId,
-    requestBody: { requests: [{ ...style, range: { startIndex, endIndex } }] },
+    requestBody: {
+      requests: [{
+        updateParagraphStyle: {
+          range: { startIndex, endIndex },
+          paragraphStyle: { namedStyleType: namedStyle },
+          fields: 'namedStyleType',
+        },
+      }],
+    },
   });
 }
 
@@ -120,12 +127,7 @@ export async function appendStoryToDoc(
   await insertAtEnd(docId, docs, titleText);
 
   // Style title as Heading 2
-  await styleLastChars(docId, docs, titleText.length, {
-    updateParagraphStyle: {
-      paragraphStyle: { namedStyleType: 'HEADING_2' },
-      fields: 'namedStyleType',
-    },
-  });
+  await styleLastChars(docId, docs, titleText.length, 'HEADING_2');
 
   // Insert table
   const docAfterTitle = await docs.documents.get({ documentId: docId });
