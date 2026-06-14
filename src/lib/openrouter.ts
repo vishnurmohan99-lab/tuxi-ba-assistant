@@ -2,11 +2,11 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
 // Multiple free models as fallbacks
 const FREE_MODELS = [
-  'meta-llama/llama-4-scout:free',
-  'mistralai/mistral-small-3.2-24b-instruct:free',
-  'qwen/qwen3-14b:free',
-  'microsoft/mai-ds-r1:free',
-  'tngtech/deepseek-r1t-chimera:free',
+  'openrouter/owl-alpha',
+  'openai/gpt-oss-120b:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'google/gemma-4-31b-it:free',
+  'moonshotai/kimi-k2.6:free',
 ];
 
 const SYSTEM_PROMPT = `You are a Senior Business Analyst for the Tuxi platform.
