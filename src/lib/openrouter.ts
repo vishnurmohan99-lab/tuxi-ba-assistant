@@ -1,5 +1,5 @@
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const MODEL = 'deepseek/deepseek-r1:free';
+const MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
 const SYSTEM_PROMPT = `You are a Senior Business Analyst for the Tuxi platform.
 
