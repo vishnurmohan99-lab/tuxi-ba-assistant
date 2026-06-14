@@ -1,219 +1,81 @@
 'use client';
 import { useState } from 'react';
+import StoryCard from '@/components/StoryCard';
 
-interface Story {
-  content: string;
-  saved: boolean;
-  title: string;
-}
+interface Story { content: string; saved: boolean; title: string; }
 
 export default function CreatePage() {
-  const [form, setForm] = useState({
-    featureName: '',
-    featureDescription: '',
-    storiesRequired: '',
-    additionalNotes: '',
-  });
+  const [form, setForm] = useState({ featureName: '', featureDescription: '', storiesRequired: '', additionalNotes: '' });
   const [loading, setLoading] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [error, setError] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const [stories, setStories] = useState<Story[]>([]);
-  const [savingIndex, setSavingIndex] = useState<number | null>(null);
 
   async function handleGenerate() {
-    setError('');
-    setStories([]);
-    setLoading(true);
+    setError(''); setSuccessMsg(''); setStories([]); setLoading(true);
     try {
-      const res = await fetch('/api/create-user-story', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
-      });
+      const res = await fetch('/api/create-user-story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-
-      // Extract title from each story (first "Title:" line)
-      const parsed: Story[] = data.stories.map((s: string) => {
+      setStories(data.stories.map((s: string) => {
         const titleMatch = s.match(/^Title:\s*(.+)/m);
-        return {
-          content: s,
-          saved: false,
-          title: titleMatch ? titleMatch[1].trim() : 'Untitled Story',
-        };
-      });
-      setStories(parsed);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Generation failed');
-    } finally {
-      setLoading(false);
-    }
+        return { content: s, saved: false, title: titleMatch ? titleMatch[1].trim() : 'Untitled Story' };
+      }));
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Generation failed'); } finally { setLoading(false); }
   }
 
-  async function handleSave(index: number) {
-    setSavingIndex(index);
+  async function handleSaveAll() {
+    setSavingAll(true); setError(''); setSuccessMsg('');
     try {
-      const s = stories[index];
-      const res = await fetch('/api/save-story', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          feature: form.featureName,
-          title: s.title,
-          story: s.content,
-          mode: 'append',
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setStories((prev) =>
-        prev.map((st, i) => (i === index ? { ...st, saved: true } : st))
-      );
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Save failed');
-    } finally {
-      setSavingIndex(null);
-    }
+      const unsaved = stories.filter((s) => !s.saved);
+      for (const s of unsaved) {
+        const res = await fetch('/api/save-story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: s.title, story: s.content, mode: 'append' }) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+      }
+      setStories((prev) => prev.map((s) => ({ ...s, saved: true })));
+      setSuccessMsg(`All ${unsaved.length} stories saved to Google Sheets!`);
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Save failed'); } finally { setSavingAll(false); }
   }
 
-  function handleEdit(index: number, value: string) {
-    setStories((prev) =>
-      prev.map((s, i) => (i === index ? { ...s, content: value, saved: false } : s))
-    );
-  }
+  const allSaved = stories.length > 0 && stories.every((s) => s.saved);
+  const unsavedCount = stories.filter((s) => !s.saved).length;
 
   return (
     <div className="page container">
-      <div className="page-header">
-        <h1>Create User Stories</h1>
-        <p>Generate user stories for a completely new feature.</p>
-      </div>
-
+      <div className="page-header"><h1>Create User Stories</h1><p>Generate user stories for a completely new feature.</p></div>
       <div className="card">
-        <div className="form-group">
-          <label>Feature Name</label>
-          <input
-            value={form.featureName}
-            onChange={(e) => setForm((f) => ({ ...f, featureName: e.target.value }))}
-            placeholder="e.g. Ride Receipt"
-          />
+        <div style={{ padding: '10px 14px', background: 'var(--accent-dim)', borderRadius: 'var(--radius)', marginBottom: '20px', fontSize: '13px', color: 'var(--accent)' }}>
+          Project context is loaded automatically from Settings.
         </div>
-
-        <div className="form-group">
-          <label>Feature Description</label>
-          <textarea
-            rows={3}
-            value={form.featureDescription}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, featureDescription: e.target.value }))
-            }
-            placeholder="e.g. Display receipts differently based on ride category."
-          />
-        </div>
-
-        <div className="form-group">
-          <label>User Stories Required</label>
-          <textarea
-            rows={4}
-            value={form.storiesRequired}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, storiesRequired: e.target.value }))
-            }
-            placeholder={`One per line, e.g.:\nDriver Receipt View\nRider Receipt View\nAdmin Receipt View`}
-          />
-        </div>
-
-        <div className="form-group">
-          <label>Additional Notes (Optional)</label>
-          <textarea
-            rows={2}
-            value={form.additionalNotes}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, additionalNotes: e.target.value }))
-            }
-            placeholder="e.g. Maintain existing functionality for non-auto rides."
-          />
-        </div>
-
+        <div className="form-group"><label>Feature Name</label><input value={form.featureName} onChange={(e) => setForm((f) => ({ ...f, featureName: e.target.value }))} placeholder="e.g. Ride Receipt" /></div>
+        <div className="form-group"><label>Feature Description</label><textarea rows={3} value={form.featureDescription} onChange={(e) => setForm((f) => ({ ...f, featureDescription: e.target.value }))} placeholder="e.g. Display receipts differently based on ride category." /></div>
+        <div className="form-group"><label>User Stories Required</label><textarea rows={4} value={form.storiesRequired} onChange={(e) => setForm((f) => ({ ...f, storiesRequired: e.target.value }))} placeholder={`One per line, e.g.:\nDriver Receipt View\nRider Receipt View\nAdmin Receipt View`} /></div>
+        <div className="form-group"><label>Additional Notes (Optional)</label><textarea rows={2} value={form.additionalNotes} onChange={(e) => setForm((f) => ({ ...f, additionalNotes: e.target.value }))} placeholder="e.g. Maintain existing functionality for non-auto rides." /></div>
         {error && <div className="alert alert-error">{error}</div>}
-
-        <button
-          className="btn btn-primary"
-          onClick={handleGenerate}
-          disabled={
-            loading ||
-            !form.featureName ||
-            !form.featureDescription ||
-            !form.storiesRequired
-          }
-        >
-          {loading ? (
-            <>
-              <span className="spinner" /> Generating...
-            </>
-          ) : (
-            'Generate User Stories'
-          )}
+        <button className="btn btn-primary" onClick={handleGenerate} disabled={loading || !form.featureName || !form.featureDescription || !form.storiesRequired}>
+          {loading ? <><span className="spinner" /> Generating...</> : 'Generate User Stories'}
         </button>
       </div>
 
-      {/* Preview */}
       {stories.length > 0 && (
         <div style={{ marginTop: '32px' }}>
-          <div className="section-label">{stories.length} Stories Generated</div>
-
-          {stories.map((story, i) => (
-            <div key={i} className="card" style={{ marginBottom: '16px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '12px',
-                }}
-              >
-                <div style={{ fontWeight: '600', fontSize: '14px' }}>
-                  {story.title}
-                </div>
-                <span
-                  className={`badge ${story.saved ? 'badge-saved' : 'badge-unsaved'}`}
-                >
-                  {story.saved ? 'Saved' : 'Unsaved'}
-                </span>
-              </div>
-
-              <textarea
-                className="story-preview"
-                style={{ width: '100%', minHeight: '280px', border: 'none' }}
-                value={story.content}
-                onChange={(e) => handleEdit(i, e.target.value)}
-              />
-
-              <div className="story-actions">
-                <button
-                  className="btn btn-success"
-                  onClick={() => handleSave(i)}
-                  disabled={story.saved || savingIndex === i}
-                >
-                  {savingIndex === i ? (
-                    <>
-                      <span className="spinner" /> Saving...
-                    </>
-                  ) : story.saved ? (
-                    '✓ Saved to Sheets'
-                  ) : (
-                    'Save to Google Sheets'
-                  )}
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={handleGenerate}
-                  disabled={loading}
-                >
-                  Regenerate All
-                </button>
-              </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '14px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
+              <strong style={{ color: 'var(--text)' }}>{stories.length} stories</strong> generated
+              {unsavedCount > 0 && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>· {unsavedCount} unsaved</span>}
             </div>
+            <button className="btn btn-success" onClick={handleSaveAll} disabled={allSaved || savingAll}>
+              {savingAll ? <><span className="spinner" /> Saving All...</> : allSaved ? '✓ All Saved to Sheets' : `Save All ${unsavedCount} to Google Sheets`}
+            </button>
+          </div>
+          {successMsg && <div className="alert alert-success">{successMsg}</div>}
+          {stories.map((story, i) => (
+            <StoryCard key={i} story={story} feature={form.featureName} index={i}
+              onEdit={(value) => setStories((prev) => prev.map((s, j) => j === i ? { ...s, content: value, saved: false } : s))} />
           ))}
+          {!allSaved && <button className="btn btn-success" style={{ width: '100%', padding: '14px' }} onClick={handleSaveAll} disabled={savingAll}>{savingAll ? <><span className="spinner" /> Saving All...</> : `Save All ${unsavedCount} Stories to Google Sheets`}</button>}
         </div>
       )}
     </div>

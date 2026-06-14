@@ -1,10 +1,10 @@
 import { google } from 'googleapis';
 
 const SHEET_NAME = 'Tuxi User Stories';
+const CONTEXT_SHEET = 'Project Context';
 
 function getAuth() {
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
   return new google.auth.JWT({
     email: process.env.GOOGLE_CLIENT_EMAIL,
     key: privateKey,
@@ -33,58 +33,139 @@ export async function getStoriesByFeature(featureName: string) {
   );
 }
 
-export async function appendStory(
-  feature: string,
-  title: string,
-  story: string
-) {
+export async function appendStory(feature: string, title: string, story: string) {
   const sheets = await getSheets();
   await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
     range: `'${SHEET_NAME}'!A:C`,
     valueInputOption: 'RAW',
-    requestBody: {
-      values: [[feature, title, story]],
-    },
+    requestBody: { values: [[feature, title, story]] },
   });
 }
 
-export async function updateStory(
-  feature: string,
-  title: string,
-  newStory: string
-) {
+export async function updateStory(feature: string, title: string, newStory: string) {
   const sheets = await getSheets();
-
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
     range: `'${SHEET_NAME}'!A:C`,
   });
-
   const rows = res.data.values || [];
   let rowIndex = -1;
-
   for (let i = 0; i < rows.length; i++) {
-    if (
-      rows[i][0]?.toLowerCase() === feature.toLowerCase() &&
-      rows[i][1]?.toLowerCase() === title.toLowerCase()
-    ) {
+    if (rows[i][0]?.toLowerCase() === feature.toLowerCase() && rows[i][1]?.toLowerCase() === title.toLowerCase()) {
       rowIndex = i + 1;
       break;
     }
   }
-
-  if (rowIndex === -1) {
-    await appendStory(feature, title, newStory);
-    return;
-  }
-
+  if (rowIndex === -1) { await appendStory(feature, title, newStory); return; }
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
     range: `'${SHEET_NAME}'!C${rowIndex}`,
     valueInputOption: 'RAW',
-    requestBody: {
-      values: [[newStory]],
-    },
+    requestBody: { values: [[newStory]] },
   });
+}
+
+// ── Test Cases ───────────────────────────────────────────────
+
+const TEST_SHEET = 'Tuxi Test Cases';
+
+export async function ensureTestSheet() {
+  const sheets = await getSheets();
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID });
+  const exists = meta.data.sheets?.some((s) => s.properties?.title === TEST_SHEET);
+  if (!exists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      requestBody: { requests: [{ addSheet: { properties: { title: TEST_SHEET } } }] },
+    });
+    // Add header row
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `'${TEST_SHEET}'!A1:D1`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [['Feature', 'User Story Title', 'Test Case Title', 'Test Cases']] },
+    });
+  }
+}
+
+export async function appendTestCase(feature: string, storyTitle: string, testCaseTitle: string, testCase: string) {
+  await ensureTestSheet();
+  const sheets = await getSheets();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `'${TEST_SHEET}'!A:D`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[feature, storyTitle, testCaseTitle, testCase]] },
+  });
+}
+
+// ── Project Context ──────────────────────────────────────────
+
+export async function saveProjectContext(text: string, filename: string) {
+  const sheets = await getSheets();
+
+  // Check if Project Context sheet exists, create if not
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID });
+  const sheetExists = meta.data.sheets?.some((s) => s.properties?.title === CONTEXT_SHEET);
+
+  if (!sheetExists) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      requestBody: {
+        requests: [{ addSheet: { properties: { title: CONTEXT_SHEET } } }],
+      },
+    });
+  }
+
+  // Clear and write context — row 1 = filename, row 2 = timestamp, row 3+ = text (chunked)
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `'${CONTEXT_SHEET}'!A:A`,
+  });
+
+  // Chunk text into rows of 45000 chars (Sheets cell limit is 50000)
+  const chunkSize = 45000;
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += chunkSize) {
+    chunks.push(text.slice(i, i + chunkSize));
+  }
+
+  const values = [
+    [filename],
+    [new Date().toISOString()],
+    ...chunks.map((c) => [c]),
+  ];
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: process.env.GOOGLE_SHEET_ID,
+    range: `'${CONTEXT_SHEET}'!A1`,
+    valueInputOption: 'RAW',
+    requestBody: { values },
+  });
+}
+
+export async function getProjectContext(): Promise<{ text: string; filename: string; updatedAt: string } | null> {
+  try {
+    const sheets = await getSheets();
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: process.env.GOOGLE_SHEET_ID });
+    const sheetExists = meta.data.sheets?.some((s) => s.properties?.title === CONTEXT_SHEET);
+    if (!sheetExists) return null;
+
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: process.env.GOOGLE_SHEET_ID,
+      range: `'${CONTEXT_SHEET}'!A:A`,
+    });
+
+    const rows = res.data.values || [];
+    if (rows.length < 3) return null;
+
+    const filename = rows[0]?.[0] || '';
+    const updatedAt = rows[1]?.[0] || '';
+    const text = rows.slice(2).map((r) => r[0] || '').join('');
+
+    return { filename, updatedAt, text };
+  } catch {
+    return null;
+  }
 }
