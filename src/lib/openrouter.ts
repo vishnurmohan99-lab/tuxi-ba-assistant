@@ -1,5 +1,5 @@
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+const MODEL = 'google/gemma-3-12b-it:free';
 
 const SYSTEM_PROMPT = `You are a Senior Business Analyst for the Tuxi platform.
 
