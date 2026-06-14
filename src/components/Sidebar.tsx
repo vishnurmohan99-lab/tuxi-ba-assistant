@@ -6,7 +6,8 @@ const nav = [
   { href: '/', label: 'Dashboard', icon: '▦' },
   { href: '/create', label: 'Create Stories', icon: '✦' },
   { href: '/update', label: 'Update Story', icon: '⟳' },
-  { href: '/add', label: 'Add Stories', icon: '+' },
+  { href: '/add', label: 'Extend Feature', icon: '↗' },
+  { href: '/test-from-story', label: 'Test from Story', icon: '🧪' },
   { href: '/settings', label: 'Settings', icon: '⚙' },
 ];
 

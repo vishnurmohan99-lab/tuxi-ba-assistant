@@ -6,6 +6,7 @@ interface Props {
   feature: string;
   index: number;
   onEdit: (value: string) => void;
+  onSaved?: (docUrl: string) => void;
 }
 
 interface TestCase {
@@ -13,13 +14,36 @@ interface TestCase {
   saved: boolean;
 }
 
-export default function StoryCard({ story, feature, index, onEdit }: Props) {
+export default function StoryCard({ story, feature, index, onEdit, onSaved }: Props) {
   const [tab, setTab] = useState<'story' | 'tests'>('story');
   const [testCases, setTestCases] = useState<TestCase[]>([]);
   const [loadingTests, setLoadingTests] = useState(false);
   const [savingTests, setSavingTests] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [docUrl, setDocUrl] = useState('');
   const [testError, setTestError] = useState('');
   const [testSuccess, setTestSuccess] = useState('');
+  const [saveError, setSaveError] = useState('');
+
+  async function handleSaveToDoc() {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await fetch('/api/save-to-doc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feature, title: story.title, story: story.content }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setDocUrl(data.docUrl);
+      if (onSaved) onSaved(data.docUrl);
+    } catch (e: unknown) {
+      setSaveError(e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   async function handleGenerateTests() {
     setLoadingTests(true);
@@ -29,12 +53,7 @@ export default function StoryCard({ story, feature, index, onEdit }: Props) {
       const res = await fetch('/api/generate-test-cases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          feature,
-          storyTitle: story.title,
-          storyContent: story.content,
-          save: false,
-        }),
+        body: JSON.stringify({ feature, storyTitle: story.title, storyContent: story.content, save: false }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -58,19 +77,14 @@ export default function StoryCard({ story, feature, index, onEdit }: Props) {
         const res = await fetch('/api/generate-test-cases', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            feature,
-            storyTitle: story.title,
-            storyContent: tc.content,
-            save: true,
-          }),
+          body: JSON.stringify({ feature, storyTitle: story.title, storyContent: tc.content, save: true }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         void tcTitle;
       }
       setTestCases((prev) => prev.map((t) => ({ ...t, saved: true })));
-      setTestSuccess(`All test cases saved to Google Sheets!`);
+      setTestSuccess('All test cases saved to Google Sheets!');
     } catch (e: unknown) {
       setTestError(e instanceof Error ? e.message : 'Save failed');
     } finally {
@@ -85,30 +99,30 @@ export default function StoryCard({ story, feature, index, onEdit }: Props) {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
         <div style={{ fontWeight: '600', fontSize: '14px' }}>{story.title}</div>
-        <span className={`badge ${story.saved ? 'badge-saved' : 'badge-unsaved'}`}>
-          {story.saved ? 'Saved' : 'Unsaved'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {docUrl && (
+            <a href={docUrl} target="_blank" rel="noreferrer"
+              style={{ fontSize: '12px', color: 'var(--accent)', textDecoration: 'underline' }}>
+              Open in Google Docs ↗
+            </a>
+          )}
+          <span className={`badge ${story.saved ? 'badge-saved' : 'badge-unsaved'}`}>
+            {story.saved ? 'Saved to Doc' : 'Unsaved'}
+          </span>
+        </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '16px', borderBottom: '1px solid var(--border)' }}>
         {(['story', 'tests'] as const).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              fontWeight: tab === t ? '600' : '400',
-              color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
-              background: 'none',
-              border: 'none',
-              borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: '-1px',
-              cursor: 'pointer',
-              transition: 'color 0.15s',
-            }}
-          >
+          <button key={t} onClick={() => setTab(t)} style={{
+            padding: '8px 16px', fontSize: '13px',
+            fontWeight: tab === t ? '600' : '400',
+            color: tab === t ? 'var(--accent)' : 'var(--text-muted)',
+            background: 'none', border: 'none',
+            borderBottom: tab === t ? '2px solid var(--accent)' : '2px solid transparent',
+            marginBottom: '-1px', cursor: 'pointer', transition: 'color 0.15s',
+          }}>
             {t === 'story' ? 'User Story' : `Test Cases ${testCases.length > 0 ? `(${testCases.length})` : ''}`}
           </button>
         ))}
@@ -123,14 +137,13 @@ export default function StoryCard({ story, feature, index, onEdit }: Props) {
             value={story.content}
             onChange={(e) => onEdit(e.target.value)}
           />
-          <div style={{ marginTop: '12px' }}>
-            <button
-              className="btn btn-secondary"
-              onClick={handleGenerateTests}
-              disabled={loadingTests}
-              style={{ fontSize: '13px' }}
-            >
-              {loadingTests ? <><span className="spinner" /> Generating Test Cases...</> : '⚡ Generate Test Cases'}
+          {saveError && <div className="alert alert-error" style={{ marginTop: '10px' }}>{saveError}</div>}
+          <div style={{ display: 'flex', gap: '8px', marginTop: '12px', flexWrap: 'wrap' }}>
+            <button className="btn btn-success" onClick={handleSaveToDoc} disabled={saving || !!story.saved}>
+              {saving ? <><span className="spinner" /> Saving to Doc...</> : story.saved ? '✓ Saved to Google Docs' : '📄 Save to Google Docs'}
+            </button>
+            <button className="btn btn-secondary" onClick={handleGenerateTests} disabled={loadingTests} style={{ fontSize: '13px' }}>
+              {loadingTests ? <><span className="spinner" /> Generating Tests...</> : '🧪 Generate Test Cases'}
             </button>
           </div>
         </>
@@ -151,24 +164,21 @@ export default function StoryCard({ story, feature, index, onEdit }: Props) {
             </div>
           ) : (
             <>
-              {/* Save All Tests Bar */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 'var(--radius)' }}>
                 <div style={{ fontSize: '13px', color: 'var(--text-dim)' }}>
-                  <strong style={{ color: 'var(--text)' }}>{testCases.length}</strong> test cases generated
+                  <strong style={{ color: 'var(--text)' }}>{testCases.length}</strong> test cases
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <button className="btn btn-secondary" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={handleGenerateTests} disabled={loadingTests}>
-                    {loadingTests ? <><span className="spinner" /> Regenerating...</> : 'Regenerate'}
+                    {loadingTests ? <><span className="spinner" /></> : 'Regenerate'}
                   </button>
                   <button className="btn btn-success" style={{ fontSize: '12px', padding: '6px 12px' }} onClick={handleSaveTests} disabled={allTestsSaved || savingTests}>
-                    {savingTests ? <><span className="spinner" /> Saving...</> : allTestsSaved ? '✓ Saved to Sheets' : `Save All to Sheets`}
+                    {savingTests ? <><span className="spinner" /> Saving...</> : allTestsSaved ? '✓ Saved' : 'Save All to Sheets'}
                   </button>
                 </div>
               </div>
-
               {testError && <div className="alert alert-error" style={{ marginBottom: '12px' }}>{testError}</div>}
               {testSuccess && <div className="alert alert-success" style={{ marginBottom: '12px' }}>{testSuccess}</div>}
-
               {testCases.map((tc, i) => {
                 const titleMatch = tc.content.match(/^Test Case Title:\s*(.+)/m);
                 const tcTitle = titleMatch ? titleMatch[1].trim() : `Test Case ${i + 1}`;

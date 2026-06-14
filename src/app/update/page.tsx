@@ -26,10 +26,10 @@ export default function UpdatePage() {
   async function handleSave() {
     setSaving(true); setError('');
     try {
-      const res = await fetch('/api/save-story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: form.existingStoryTitle, story, mode: 'update' }) });
+      const res = await fetch('/api/save-to-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: form.existingStoryTitle, story }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setSaved(true); setSuccessMsg('Story updated in Google Sheets!');
+      setSaved(true); setSuccessMsg('Story updated in Google Docs!');
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Save failed'); } finally { setSaving(false); }
   }
 

@@ -11,6 +11,7 @@ export default function CreatePage() {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [stories, setStories] = useState<Story[]>([]);
+  const [docUrl, setDocUrl] = useState('');
 
   async function handleGenerate() {
     setError(''); setSuccessMsg(''); setStories([]); setLoading(true);
@@ -29,13 +30,16 @@ export default function CreatePage() {
     setSavingAll(true); setError(''); setSuccessMsg('');
     try {
       const unsaved = stories.filter((s) => !s.saved);
+      let docUrl = '';
       for (const s of unsaved) {
-        const res = await fetch('/api/save-story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: s.title, story: s.content, mode: 'append' }) });
+        const res = await fetch('/api/save-to-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: s.title, story: s.content }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
+        docUrl = data.docUrl;
       }
       setStories((prev) => prev.map((s) => ({ ...s, saved: true })));
-      setSuccessMsg(`All ${unsaved.length} stories saved to Google Sheets!`);
+      setDocUrl(docUrl);
+      setSuccessMsg(`All ${unsaved.length} stories saved to Google Docs!`);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Save failed'); } finally { setSavingAll(false); }
   }
 
@@ -65,9 +69,10 @@ export default function CreatePage() {
             <div style={{ fontSize: '14px', color: 'var(--text-dim)' }}>
               <strong style={{ color: 'var(--text)' }}>{stories.length} stories</strong> generated
               {unsavedCount > 0 && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>· {unsavedCount} unsaved</span>}
+              {docUrl && <a href={docUrl} target="_blank" rel="noreferrer" style={{ marginLeft: '12px', fontSize: '12px', color: 'var(--accent)', textDecoration: 'underline' }}>Open Google Doc ↗</a>}
             </div>
             <button className="btn btn-success" onClick={handleSaveAll} disabled={allSaved || savingAll}>
-              {savingAll ? <><span className="spinner" /> Saving All...</> : allSaved ? '✓ All Saved to Sheets' : `Save All ${unsavedCount} to Google Sheets`}
+              {savingAll ? <><span className="spinner" /> Saving to Doc...</> : allSaved ? '✓ All Saved to Google Docs' : `📄 Save All ${unsavedCount} to Google Docs`}
             </button>
           </div>
           {successMsg && <div className="alert alert-success">{successMsg}</div>}
@@ -75,7 +80,7 @@ export default function CreatePage() {
             <StoryCard key={i} story={story} feature={form.featureName} index={i}
               onEdit={(value) => setStories((prev) => prev.map((s, j) => j === i ? { ...s, content: value, saved: false } : s))} />
           ))}
-          {!allSaved && <button className="btn btn-success" style={{ width: '100%', padding: '14px' }} onClick={handleSaveAll} disabled={savingAll}>{savingAll ? <><span className="spinner" /> Saving All...</> : `Save All ${unsavedCount} Stories to Google Sheets`}</button>}
+          {!allSaved && <button className="btn btn-success" style={{ width: '100%', padding: '14px' }} onClick={handleSaveAll} disabled={savingAll}>{savingAll ? <><span className="spinner" /> Saving to Doc...</> : `📄 Save All ${unsavedCount} Stories to Google Docs`}</button>}
         </div>
       )}
     </div>

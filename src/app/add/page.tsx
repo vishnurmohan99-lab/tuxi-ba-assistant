@@ -30,12 +30,12 @@ export default function AddPage() {
     try {
       const unsaved = stories.filter((s) => !s.saved);
       for (const s of unsaved) {
-        const res = await fetch('/api/save-story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: s.title, story: s.content, mode: 'append' }) });
+        const res = await fetch('/api/save-to-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: s.title, story: s.content }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
       }
       setStories((prev) => prev.map((s) => ({ ...s, saved: true })));
-      setSuccessMsg(`All ${unsaved.length} stories saved to Google Sheets!`);
+      setSuccessMsg(`All ${unsaved.length} stories saved to Google Docs!`);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Save failed'); } finally { setSavingAll(false); }
   }
 
@@ -44,7 +44,7 @@ export default function AddPage() {
 
   return (
     <div className="page container">
-      <div className="page-header"><h1>Add User Stories</h1><p>Extend an existing feature with new user stories.</p></div>
+      <div className="page-header"><h1>Extend Feature</h1><p>Add new user stories to an existing feature while maintaining consistency.</p></div>
       <div className="card">
         <div style={{ padding: '10px 14px', background: 'var(--accent-dim)', borderRadius: 'var(--radius)', marginBottom: '20px', fontSize: '13px', color: 'var(--accent)' }}>
           Project context is loaded automatically from Settings.
@@ -61,14 +61,14 @@ export default function AddPage() {
         <div style={{ marginTop: '32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', padding: '14px 20px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
             <div style={{ fontSize: '14px', color: 'var(--text-dim)' }}><strong style={{ color: 'var(--text)' }}>{stories.length} stories</strong> generated{unsavedCount > 0 && <span style={{ color: 'var(--warning)', marginLeft: '8px' }}>· {unsavedCount} unsaved</span>}</div>
-            <button className="btn btn-success" onClick={handleSaveAll} disabled={allSaved || savingAll}>{savingAll ? <><span className="spinner" /> Saving All...</> : allSaved ? '✓ All Saved' : `Save All ${unsavedCount} to Google Sheets`}</button>
+            <button className="btn btn-success" onClick={handleSaveAll} disabled={allSaved || savingAll}>{savingAll ? <><span className="spinner" /> Saving to Doc...</> : allSaved ? '✓ All Saved to Google Docs' : `📄 Save All ${unsavedCount} to Google Docs`}</button>
           </div>
           {successMsg && <div className="alert alert-success">{successMsg}</div>}
           {stories.map((story, i) => (
             <StoryCard key={i} story={story} feature={form.featureName} index={i}
               onEdit={(value) => setStories((prev) => prev.map((s, j) => j === i ? { ...s, content: value, saved: false } : s))} />
           ))}
-          {!allSaved && <button className="btn btn-success" style={{ width: '100%', padding: '14px' }} onClick={handleSaveAll} disabled={savingAll}>{savingAll ? <><span className="spinner" /> Saving All...</> : `Save All ${unsavedCount} Stories to Google Sheets`}</button>}
+          {!allSaved && <button className="btn btn-success" style={{ width: '100%', padding: '14px' }} onClick={handleSaveAll} disabled={savingAll}>{savingAll ? <><span className="spinner" /> Saving to Doc...</> : `Save All ${unsavedCount} Stories to Google Sheets`}</button>}
         </div>
       )}
     </div>

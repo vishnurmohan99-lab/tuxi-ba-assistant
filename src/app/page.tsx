@@ -18,16 +18,23 @@ const cards = [
   },
   {
     href: '/add',
-    icon: '+',
-    title: 'Add User Stories',
-    desc: 'Extend an existing feature with new user stories.',
+    icon: '↗',
+    title: 'Extend Feature',
+    desc: 'Add more stories to an existing feature with full consistency.',
     color: '#34c98a',
+  },
+  {
+    href: '/test-from-story',
+    icon: '🧪',
+    title: 'Test from Story',
+    desc: 'Paste any user story and generate test cases instantly.',
+    color: '#f5a623',
   },
   {
     href: '/settings',
     icon: '⚙',
     title: 'Settings',
-    desc: 'View environment configuration and model info.',
+    desc: 'Manage project context and environment configuration.',
     color: '#6b7591',
   },
 ];

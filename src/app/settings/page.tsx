@@ -181,6 +181,20 @@ export default function SettingsPage() {
       </div>
 
       {/* Env Vars */}
+      <div className="card" style={{ marginBottom: '24px' }}>
+        <div className="section-label" style={{ marginBottom: '12px' }}>Google Documents</div>
+        <div style={{ fontSize: '13px', color: 'var(--text-dim)', lineHeight: '1.8' }}>
+          <div>Doc name: <strong style={{ color: 'var(--text)' }}>Tuxi BA - User Stories</strong></div>
+          <div>Structure: <strong style={{ color: 'var(--text)' }}>HEADING 1 per Feature · HEADING 2 per Story</strong></div>
+          <div style={{ marginTop: '8px', color: 'var(--text-muted)', fontSize: '12px' }}>
+            Auto-created on first save. Each feature gets its own section. New stories are appended under the correct feature automatically.
+          </div>
+          <div style={{ marginTop: '8px', color: 'var(--warning)', fontSize: '12px' }}>
+            ⚠ Make sure both Google Docs API and Google Drive API are enabled in your Google Cloud project.
+          </div>
+        </div>
+      </div>
+
       <div className="card">
         <div className="section-label" style={{ marginBottom: '16px' }}>Required Environment Variables</div>
         <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
