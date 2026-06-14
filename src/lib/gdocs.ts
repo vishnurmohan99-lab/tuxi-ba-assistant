@@ -10,6 +10,7 @@ function getAuth() {
     scopes: [
       'https://www.googleapis.com/auth/documents',
       'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/drive.file',
     ],
   });
 }
@@ -26,6 +27,8 @@ export async function getOrCreateDoc(): Promise<string> {
   const search = await drive.files.list({
     q: `name='${DOC_NAME}' and mimeType='application/vnd.google-apps.document' and '${FOLDER_ID}' in parents and trashed=false`,
     fields: 'files(id, name)',
+    includeItemsFromAllDrives: true,
+    supportsAllDrives: true,
   });
 
   if (search.data.files && search.data.files.length > 0) {
@@ -34,6 +37,7 @@ export async function getOrCreateDoc(): Promise<string> {
 
   // Create new doc inside the shared folder
   const file = await drive.files.create({
+    supportsAllDrives: true,
     requestBody: {
       name: DOC_NAME,
       mimeType: 'application/vnd.google-apps.document',
