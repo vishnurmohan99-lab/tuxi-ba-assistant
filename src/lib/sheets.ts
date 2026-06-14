@@ -21,7 +21,7 @@ export async function getAllStories() {
   const sheets = await getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A2:C`,
+    range: `'${SHEET_NAME}'!A2:C`,
   });
   return res.data.values || [];
 }
@@ -41,7 +41,7 @@ export async function appendStory(
   const sheets = await getSheets();
   await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A:C`,
+    range: `'${SHEET_NAME}'!A:C`,
     valueInputOption: 'RAW',
     requestBody: {
       values: [[feature, title, story]],
@@ -56,10 +56,9 @@ export async function updateStory(
 ) {
   const sheets = await getSheets();
 
-  // Find the row
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!A:C`,
+    range: `'${SHEET_NAME}'!A:C`,
   });
 
   const rows = res.data.values || [];
@@ -70,21 +69,19 @@ export async function updateStory(
       rows[i][0]?.toLowerCase() === feature.toLowerCase() &&
       rows[i][1]?.toLowerCase() === title.toLowerCase()
     ) {
-      rowIndex = i + 1; // 1-indexed
+      rowIndex = i + 1;
       break;
     }
   }
 
   if (rowIndex === -1) {
-    // Story not found — append as new row
     await appendStory(feature, title, newStory);
     return;
   }
 
-  // Update the found row
   await sheets.spreadsheets.values.update({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `${SHEET_NAME}!C${rowIndex}`,
+    range: `'${SHEET_NAME}'!C${rowIndex}`,
     valueInputOption: 'RAW',
     requestBody: {
       values: [[newStory]],
