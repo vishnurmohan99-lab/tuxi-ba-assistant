@@ -1,11 +1,15 @@
 'use client';
 import { useState } from 'react';
 import StoryCard from '@/components/StoryCard';
+import StoryInputList, { StoryInput } from '@/components/StoryInputList';
 
 interface Story { content: string; saved: boolean; title: string; }
 
 export default function CreatePage() {
-  const [form, setForm] = useState({ featureName: '', featureDescription: '', storiesRequired: '', additionalNotes: '' });
+  const [featureName, setFeatureName] = useState('');
+  const [featureDescription, setFeatureDescription] = useState('');
+  const [storyInputs, setStoryInputs] = useState<StoryInput[]>([{ id: crypto.randomUUID(), name: '', description: '' }]);
+  const [additionalNotes, setAdditionalNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [error, setError] = useState('');
@@ -13,10 +17,29 @@ export default function CreatePage() {
   const [stories, setStories] = useState<Story[]>([]);
   const [docUrl, setDocUrl] = useState('');
 
+  const filledStories = storyInputs.filter((s) => s.name.trim());
+
+  function buildStoriesRequired() {
+    return filledStories.map((s) =>
+      s.description.trim()
+        ? `${s.name.trim()}\n  Details: ${s.description.trim()}`
+        : s.name.trim()
+    ).join('\n\n');
+  }
+
   async function handleGenerate() {
     setError(''); setSuccessMsg(''); setStories([]); setLoading(true);
     try {
-      const res = await fetch('/api/create-user-story', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const res = await fetch('/api/create-user-story', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          featureName,
+          featureDescription,
+          storiesRequired: buildStoriesRequired(),
+          additionalNotes,
+        }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setStories(data.stories.map((s: string) => {
@@ -30,15 +53,15 @@ export default function CreatePage() {
     setSavingAll(true); setError(''); setSuccessMsg('');
     try {
       const unsaved = stories.filter((s) => !s.saved);
-      let docUrl = '';
+      let url = '';
       for (const s of unsaved) {
-        const res = await fetch('/api/save-to-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: form.featureName, title: s.title, story: s.content }) });
+        const res = await fetch('/api/save-to-doc', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ feature: featureName, title: s.title, story: s.content }) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
-        docUrl = data.docUrl;
+        url = data.docUrl;
       }
       setStories((prev) => prev.map((s) => ({ ...s, saved: true })));
-      setDocUrl(docUrl);
+      setDocUrl(url);
       setSuccessMsg(`All ${unsaved.length} stories saved to Google Docs!`);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Save failed'); } finally { setSavingAll(false); }
   }
@@ -53,13 +76,35 @@ export default function CreatePage() {
         <div style={{ padding: '10px 14px', background: 'var(--accent-dim)', borderRadius: 'var(--radius)', marginBottom: '20px', fontSize: '13px', color: 'var(--accent)' }}>
           Project context is loaded automatically from Settings.
         </div>
-        <div className="form-group"><label>Feature Name</label><input value={form.featureName} onChange={(e) => setForm((f) => ({ ...f, featureName: e.target.value }))} placeholder="e.g. Ride Receipt" /></div>
-        <div className="form-group"><label>Feature Description</label><textarea rows={3} value={form.featureDescription} onChange={(e) => setForm((f) => ({ ...f, featureDescription: e.target.value }))} placeholder="e.g. Display receipts differently based on ride category." /></div>
-        <div className="form-group"><label>User Stories Required</label><textarea rows={4} value={form.storiesRequired} onChange={(e) => setForm((f) => ({ ...f, storiesRequired: e.target.value }))} placeholder={`One per line, e.g.:\nDriver Receipt View\nRider Receipt View\nAdmin Receipt View`} /></div>
-        <div className="form-group"><label>Additional Notes (Optional)</label><textarea rows={2} value={form.additionalNotes} onChange={(e) => setForm((f) => ({ ...f, additionalNotes: e.target.value }))} placeholder="e.g. Maintain existing functionality for non-auto rides." /></div>
+
+        <div className="form-group">
+          <label>Feature Name</label>
+          <input value={featureName} onChange={(e) => setFeatureName(e.target.value)} placeholder="e.g. Ride Receipt" />
+        </div>
+
+        <div className="form-group">
+          <label>Feature Description</label>
+          <textarea rows={3} value={featureDescription} onChange={(e) => setFeatureDescription(e.target.value)} placeholder="e.g. Display receipts differently based on ride category." />
+        </div>
+
+        <div className="form-group">
+          <label>User Stories Required</label>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+            Add each story with a name and description. A new box appears automatically as you type.
+          </div>
+          <StoryInputList stories={storyInputs} onChange={setStoryInputs} />
+        </div>
+
+        <div className="form-group">
+          <label>Additional Notes (Optional)</label>
+          <textarea rows={2} value={additionalNotes} onChange={(e) => setAdditionalNotes(e.target.value)} placeholder="e.g. Maintain existing functionality for non-auto rides." />
+        </div>
+
         {error && <div className="alert alert-error">{error}</div>}
-        <button className="btn btn-primary" onClick={handleGenerate} disabled={loading || !form.featureName || !form.featureDescription || !form.storiesRequired}>
-          {loading ? <><span className="spinner" /> Generating...</> : 'Generate User Stories'}
+
+        <button className="btn btn-primary" onClick={handleGenerate}
+          disabled={loading || !featureName || !featureDescription || filledStories.length === 0}>
+          {loading ? <><span className="spinner" /> Generating...</> : `Generate ${filledStories.length > 0 ? filledStories.length : ''} User Stories`}
         </button>
       </div>
 
@@ -77,7 +122,7 @@ export default function CreatePage() {
           </div>
           {successMsg && <div className="alert alert-success">{successMsg}</div>}
           {stories.map((story, i) => (
-            <StoryCard key={i} story={story} feature={form.featureName} index={i}
+            <StoryCard key={i} story={story} feature={featureName} index={i}
               onEdit={(value) => setStories((prev) => prev.map((s, j) => j === i ? { ...s, content: value, saved: false } : s))} />
           ))}
           {!allSaved && <button className="btn btn-success" style={{ width: '100%', padding: '14px' }} onClick={handleSaveAll} disabled={savingAll}>{savingAll ? <><span className="spinner" /> Saving to Doc...</> : `📄 Save All ${unsavedCount} Stories to Google Docs`}</button>}

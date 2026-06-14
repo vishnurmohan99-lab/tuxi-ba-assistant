@@ -82,7 +82,7 @@ export default function TestFromStoryPage() {
         <div className="form-group" style={{ marginTop: '16px' }}>
           <label>User Story Content</label>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-            Paste the full user story including As a / I want / So that, Acceptance Criteria, and Edge Cases.
+            Paste the full user story — Description, As a / I want / So that, and all Acceptance Criteria. More detail = more test cases generated.
           </div>
           <textarea
             rows={14}

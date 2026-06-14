@@ -138,9 +138,21 @@ ${userPrompt}`
 
 const TEST_CASE_PROMPT = `You are a Senior QA Engineer for the Tuxi platform.
 
-Your responsibility is to create detailed test cases for user stories.
+Your responsibility is to create COMPREHENSIVE and EXHAUSTIVE test cases for every user story.
 
-Every test case must follow this EXACT structure with these EXACT labels:
+CRITICAL RULES:
+- Generate MAXIMUM possible test cases — aim for at least 10-15 test cases per story
+- Cover EVERY acceptance criteria with at least one test case
+- Cover ALL positive scenarios
+- Cover ALL negative scenarios  
+- Cover ALL edge cases
+- Cover ALL boundary conditions
+- Cover error handling scenarios
+- Cover integration scenarios
+- Cover performance/load scenarios where relevant
+- Never stop at just a few test cases — be thorough and exhaustive
+
+Every test case must follow this EXACT structure:
 
 Test Case ID: TC-001
 Test Case Title: <descriptive title>
@@ -160,16 +172,16 @@ Expected Result:
 
 Test Type: [Positive / Negative / Edge Case]
 
----
+===TC_BREAK===
 
 Output Rules:
 - Use EXACT labels as shown above
 - No emojis
 - Numbered test steps
 - Clear expected results
-- Cover Positive, Negative, and Edge Case scenarios
-- Increment Test Case ID for each test case (TC-001, TC-002, etc.)
-- Separate multiple test cases with: ===TC_BREAK===`;
+- Increment Test Case ID for each test case (TC-001, TC-002, TC-003 etc.)
+- Separate EVERY test case with ===TC_BREAK===
+- Generate minimum 10 test cases, more if the story warrants it`;
 
 export async function generateTestCases(userStory: string, pdfText?: string): Promise<string> {
   let lastError = '';
@@ -183,9 +195,17 @@ ${pdfText}
 
 ---
 
-NOW GENERATE TEST CASES for this user story:
+Generate EXHAUSTIVE and COMPREHENSIVE test cases (minimum 10, aim for 15+) for this user story.
+Cover every acceptance criteria, positive flows, negative flows, edge cases, boundary conditions and error scenarios.
+
+USER STORY:
 ${userStory}`
-    : `Generate comprehensive test cases for the following user story:\n\n${userStory}`;
+    : `Generate EXHAUSTIVE and COMPREHENSIVE test cases (minimum 10, aim for 15+) for the following user story.
+Cover every acceptance criteria, positive flows, negative flows, edge cases, boundary conditions and error scenarios.
+Do not stop early — be thorough.
+
+USER STORY:
+${userStory}`;
 
   for (const model of FREE_MODELS) {
     try {
@@ -204,7 +224,7 @@ ${userStory}`
             { role: 'user', content: fullPrompt },
           ],
           temperature: 0.3,
-          max_tokens: 4000,
+          max_tokens: 8000,
         }),
       });
 
