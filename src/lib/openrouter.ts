@@ -140,11 +140,11 @@ const TEST_CASE_PROMPT = `You are a Senior QA Engineer for the Tuxi platform.
 
 Your responsibility is to create detailed test cases for user stories.
 
-Every test case must follow this EXACT structure:
+Every test case must follow this EXACT structure with these EXACT labels:
 
 Test Case ID: TC-001
-Test Case Title: <Title>
-User Story Reference: <Story Title>
+Test Case Title: <descriptive title>
+User Story Reference: <story title>
 
 Pre-conditions:
 - Pre-condition 1
@@ -156,17 +156,19 @@ Test Steps:
 3. Step 3
 
 Expected Result:
-- Expected result description
+- Clear expected result description
 
 Test Type: [Positive / Negative / Edge Case]
 
 ---
 
 Output Rules:
+- Use EXACT labels as shown above
 - No emojis
 - Numbered test steps
 - Clear expected results
 - Cover Positive, Negative, and Edge Case scenarios
+- Increment Test Case ID for each test case (TC-001, TC-002, etc.)
 - Separate multiple test cases with: ===TC_BREAK===`;
 
 export async function generateTestCases(userStory: string, pdfText?: string): Promise<string> {

@@ -82,21 +82,66 @@ export async function ensureTestSheet() {
     // Add header row
     await sheets.spreadsheets.values.update({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: `'${TEST_SHEET}'!A1:D1`,
+      range: `'${TEST_SHEET}'!A1:I1`,
       valueInputOption: 'RAW',
-      requestBody: { values: [['Feature', 'User Story Title', 'Test Case Title', 'Test Cases']] },
+      requestBody: {
+        values: [[
+          'Feature',
+          'User Story',
+          'Title',
+          'Test Case Title',
+          'Test Case ID',
+          'User Story Reference',
+          'Pre-conditions',
+          'Test Steps',
+          'Expected Result',
+        ]],
+      },
     });
   }
 }
 
-export async function appendTestCase(feature: string, storyTitle: string, testCaseTitle: string, testCase: string) {
+export async function appendTestCase(
+  feature: string,
+  storyTitle: string,
+  testCaseTitle: string,
+  testCase: string
+) {
   await ensureTestSheet();
   const sheets = await getSheets();
+
+  // Parse test case fields
+  const idMatch = testCase.match(/^Test Case ID:\s*(.+)/m);
+  const titleMatch = testCase.match(/^Test Case Title:\s*(.+)/m);
+  const referenceMatch = testCase.match(/^User Story Reference:\s*(.+)/m);
+  const preCondMatch = testCase.match(/Pre-conditions:([\s\S]*?)(?=Test Steps:|$)/i);
+  const stepsMatch = testCase.match(/Test Steps:([\s\S]*?)(?=Expected Result:|$)/i);
+  const expectedMatch = testCase.match(/Expected Result:([\s\S]*?)(?=Test Type:|$)/i);
+
+  const testCaseId = idMatch ? idMatch[1].trim() : '';
+  const parsedTitle = titleMatch ? titleMatch[1].trim() : testCaseTitle;
+  const reference = referenceMatch ? referenceMatch[1].trim() : storyTitle;
+  const preConditions = preCondMatch ? preCondMatch[1].trim() : '';
+  const testSteps = stepsMatch ? stepsMatch[1].trim() : '';
+  const expectedResult = expectedMatch ? expectedMatch[1].trim() : '';
+
   await sheets.spreadsheets.values.append({
     spreadsheetId: process.env.GOOGLE_SHEET_ID,
-    range: `'${TEST_SHEET}'!A:D`,
+    range: `'${TEST_SHEET}'!A:I`,
     valueInputOption: 'RAW',
-    requestBody: { values: [[feature, storyTitle, testCaseTitle, testCase]] },
+    requestBody: {
+      values: [[
+        feature,
+        storyTitle,
+        parsedTitle,
+        parsedTitle,
+        testCaseId,
+        reference,
+        preConditions,
+        testSteps,
+        expectedResult,
+      ]],
+    },
   });
 }
 

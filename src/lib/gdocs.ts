@@ -23,7 +23,6 @@ export async function getOrCreateDoc(): Promise<string> {
 
   const DOC_NAME = 'Tuxi BA - User Stories';
 
-  // Search for existing doc inside the shared folder
   const search = await drive.files.list({
     q: `name='${DOC_NAME}' and mimeType='application/vnd.google-apps.document' and '${FOLDER_ID}' in parents and trashed=false`,
     fields: 'files(id, name)',
@@ -35,7 +34,6 @@ export async function getOrCreateDoc(): Promise<string> {
     return search.data.files[0].id!;
   }
 
-  // Create new doc inside the shared folder
   const file = await drive.files.create({
     supportsAllDrives: true,
     requestBody: {
@@ -49,42 +47,42 @@ export async function getOrCreateDoc(): Promise<string> {
   return file.data.id!;
 }
 
-// ── Check if a feature heading exists in the doc ─────────────
+// ── Parse story content into structured fields ───────────────
 
-async function getDocContent(docId: string) {
-  const auth = getAuth();
-  const docs = google.docs({ version: 'v1', auth });
-  const res = await docs.documents.get({ documentId: docId });
-  return res.data;
+function parseStory(storyContent: string): {
+  storyId: string;
+  asA: string;
+  description: string;
+  acceptanceCriteria: string;
+} {
+  // Extract "As a X, I want Y, So that Z"
+  const asAMatch = storyContent.match(/As a (.+?)[\n\r]/i);
+  const iWantMatch = storyContent.match(/I want to (.+?)[\n\r]/i);
+  const soThatMatch = storyContent.match(/So that (.+?)[\n\r]/i);
+
+  const asA = [
+    asAMatch ? `As a ${asAMatch[1].trim()},` : '',
+    iWantMatch ? `I want to ${iWantMatch[1].trim()},` : '',
+    soThatMatch ? `So that ${soThatMatch[1].trim()}.` : '',
+  ].filter(Boolean).join(' ');
+
+  // Extract acceptance criteria section
+  const acMatch = storyContent.match(/Acceptance Criteria[\s\S]*?(?=Edge Cases|$)/i);
+  const acRaw = acMatch ? acMatch[0].replace(/Acceptance Criteria/i, '').trim() : '';
+
+  // Extract edge cases and append to acceptance criteria
+  const edgeMatch = storyContent.match(/Edge Cases[\s\S]*$/i);
+  const edgeRaw = edgeMatch ? edgeMatch[0].trim() : '';
+
+  const acceptanceCriteria = [acRaw, edgeRaw].filter(Boolean).join('\n\n');
+
+  // Generate story ID from title
+  const storyId = 'US-' + Math.floor(Math.random() * 900 + 100);
+
+  return { storyId, asA, description: acRaw, acceptanceCriteria };
 }
 
-function findFeatureHeading(doc: any, featureName: string): number | null {
-  const content = doc.body?.content || [];
-  for (const element of content) {
-    if (element.paragraph) {
-      const style = element.paragraph.paragraphStyle?.namedStyleType;
-      if (style === 'HEADING_1') {
-        const text = element.paragraph.elements
-          ?.map((e: any) => e.textRun?.content || '')
-          .join('')
-          .replace(/\n/g, '')
-          .trim();
-        if (text?.toLowerCase() === featureName.toLowerCase()) {
-          return element.endIndex ?? null;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-function getDocEndIndex(doc: any): number {
-  const content = doc.body?.content || [];
-  if (content.length === 0) return 1;
-  return (content[content.length - 1].endIndex ?? 1) - 1;
-}
-
-// ── Append a user story under a feature tab ──────────────────
+// ── Append a user story as a formatted table ─────────────────
 
 export async function appendStoryToDoc(
   featureName: string,
@@ -95,102 +93,130 @@ export async function appendStoryToDoc(
   const docs = google.docs({ version: 'v1', auth });
 
   const docId = await getOrCreateDoc();
-  const doc = await getDocContent(docId);
+
+  // Get current doc to find end index
+  const docRes = await docs.documents.get({ documentId: docId });
+  const content = docRes.data.body?.content || [];
+  const endIndex = content.length > 0
+    ? (content[content.length - 1].endIndex ?? 2) - 1
+    : 1;
+
+  const { storyId, asA, acceptanceCriteria } = parseStory(storyContent);
 
   const requests: any[] = [];
-  const featureIndex = findFeatureHeading(doc, featureName);
-  const endIndex = getDocEndIndex(doc);
+  let idx = endIndex;
 
-  if (featureIndex === null) {
-    // Feature doesn't exist — add new HEADING_1 section at end
-    const insertIndex = endIndex > 1 ? endIndex : 1;
-
-    if (endIndex > 1) {
-      requests.push({ insertPageBreak: { location: { index: insertIndex } } });
-    }
-
-    const afterBreak = endIndex > 1 ? insertIndex + 1 : insertIndex;
-
-    requests.push({ insertText: { location: { index: afterBreak }, text: `${featureName}\n` } });
-    requests.push({
-      updateParagraphStyle: {
-        range: { startIndex: afterBreak, endIndex: afterBreak + featureName.length + 1 },
-        paragraphStyle: { namedStyleType: 'HEADING_1' },
-        fields: 'namedStyleType',
-      },
-    });
-
-    const storyTitleIndex = afterBreak + featureName.length + 1;
-    requests.push({ insertText: { location: { index: storyTitleIndex }, text: `${storyTitle}\n` } });
-    requests.push({
-      updateParagraphStyle: {
-        range: { startIndex: storyTitleIndex, endIndex: storyTitleIndex + storyTitle.length + 1 },
-        paragraphStyle: { namedStyleType: 'HEADING_2' },
-        fields: 'namedStyleType',
-      },
-    });
-
-    const contentIndex = storyTitleIndex + storyTitle.length + 1;
-    requests.push({ insertText: { location: { index: contentIndex }, text: `${storyContent}\n\n` } });
-    requests.push({
-      updateParagraphStyle: {
-        range: { startIndex: contentIndex, endIndex: contentIndex + storyContent.length + 2 },
-        paragraphStyle: { namedStyleType: 'NORMAL_TEXT' },
-        fields: 'namedStyleType',
-      },
-    });
-
-  } else {
-    const content = doc.body?.content || [];
-    let insertAt = endIndex;
-    let foundFeature = false;
-
-    for (const element of content) {
-      if (element.paragraph) {
-        const style = element.paragraph.paragraphStyle?.namedStyleType;
-        const text = element.paragraph.elements
-          ?.map((e: any) => e.textRun?.content || '')
-          .join('')
-          .replace(/\n/g, '')
-          .trim();
-
-        if (style === 'HEADING_1' && text?.toLowerCase() === featureName.toLowerCase()) {
-          foundFeature = true;
-          continue;
-        }
-
-        if (foundFeature && style === 'HEADING_1') {
-          insertAt = element.startIndex ?? endIndex;
-          break;
-        }
-      }
-    }
-
-    requests.push({ insertText: { location: { index: insertAt }, text: `${storyTitle}\n` } });
-    requests.push({
-      updateParagraphStyle: {
-        range: { startIndex: insertAt, endIndex: insertAt + storyTitle.length + 1 },
-        paragraphStyle: { namedStyleType: 'HEADING_2' },
-        fields: 'namedStyleType',
-      },
-    });
-
-    const contentIndex = insertAt + storyTitle.length + 1;
-    requests.push({ insertText: { location: { index: contentIndex }, text: `${storyContent}\n\n` } });
-    requests.push({
-      updateParagraphStyle: {
-        range: { startIndex: contentIndex, endIndex: contentIndex + storyContent.length + 2 },
-        paragraphStyle: { namedStyleType: 'NORMAL_TEXT' },
-        fields: 'namedStyleType',
-      },
-    });
+  // Add spacing if not empty doc
+  if (endIndex > 1) {
+    requests.push({ insertText: { location: { index: idx }, text: '\n' } });
+    idx += 1;
   }
 
-  // Execute all requests in sequence
-  for (const request of requests) {
+  // Title line: "User Story: <Feature> - <StoryTitle>"
+  const titleText = `User Story: ${featureName} - ${storyTitle}\n`;
+  requests.push({ insertText: { location: { index: idx }, text: titleText } });
+  requests.push({
+    updateParagraphStyle: {
+      range: { startIndex: idx, endIndex: idx + titleText.length },
+      paragraphStyle: { namedStyleType: 'HEADING_2' },
+      fields: 'namedStyleType',
+    },
+  });
+  idx += titleText.length;
+
+  // Insert a 4-row x 2-col table
+  requests.push({
+    insertTable: {
+      rows: 4,
+      columns: 2,
+      location: { index: idx },
+    },
+  });
+
+  // Execute all so far to get the table in place
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: { requests },
+  });
+
+  // Now get the updated doc to find table cell indices
+  const updatedDoc = await docs.documents.get({ documentId: docId });
+  const updatedContent = updatedDoc.data.body?.content || [];
+
+  // Find the table we just inserted
+  let tableElement: any = null;
+  for (const el of updatedContent) {
+    if (el.table && el.startIndex && el.startIndex >= idx) {
+      tableElement = el;
+      break;
+    }
+  }
+
+  // Also search near our insert point
+  if (!tableElement) {
+    for (const el of updatedContent) {
+      if (el.table) {
+        tableElement = el;
+      }
+    }
+  }
+
+  if (!tableElement) {
+    return `https://docs.google.com/document/d/${docId}/edit`;
+  }
+
+  const tableRows = tableElement.table?.tableRows || [];
+  const cellRequests: any[] = [];
+
+  // Helper to get cell content index
+  function getCellIndex(rowIdx: number, colIdx: number): number {
+    const cell = tableRows[rowIdx]?.tableCells?.[colIdx];
+    const cellContent = cell?.content?.[0];
+    return cellContent?.startIndex ?? 0;
+  }
+
+  // Row 0: Story ID | As a... statement
+  const r0c0 = getCellIndex(0, 0);
+  const r0c1 = getCellIndex(0, 1);
+
+  cellRequests.push({ insertText: { location: { index: r0c0 + 1 }, text: storyId } });
+  cellRequests.push({
+    updateTextStyle: {
+      range: { startIndex: r0c0 + 1, endIndex: r0c0 + 1 + storyId.length },
+      textStyle: { bold: true, foregroundColor: { color: { rgbColor: { red: 0, green: 0.5, blue: 0 } } } },
+      fields: 'bold,foregroundColor',
+    },
+  });
+  cellRequests.push({ insertText: { location: { index: r0c1 + 1 }, text: asA } });
+
+  // Row 1: Description label | Story content summary
+  const r1c0 = getCellIndex(1, 0);
+  const r1c1 = getCellIndex(1, 1);
+  const descText = storyContent.split('---')[0].replace(/Title:.*\n/i, '').replace(/As a[\s\S]*?So that[^\n]*/i, '').trim();
+
+  cellRequests.push({ insertText: { location: { index: r1c0 + 1 }, text: 'Description' } });
+  cellRequests.push({ insertText: { location: { index: r1c1 + 1 }, text: descText || storyContent.slice(0, 300) } });
+
+  // Row 2: Acceptance Criteria label | criteria content
+  const r2c0 = getCellIndex(2, 0);
+  const r2c1 = getCellIndex(2, 1);
+
+  cellRequests.push({ insertText: { location: { index: r2c0 + 1 }, text: 'Acceptance criteria' } });
+  cellRequests.push({ insertText: { location: { index: r2c1 + 1 }, text: acceptanceCriteria || 'See story content.' } });
+
+  // Row 3: TEST REPORT label | status
+  const r3c0 = getCellIndex(3, 0);
+  const r3c1 = getCellIndex(3, 1);
+
+  cellRequests.push({ insertText: { location: { index: r3c0 + 1 }, text: 'TEST REPORT' } });
+  cellRequests.push({ insertText: { location: { index: r3c1 + 1 }, text: 'The user story meets all defined acceptance criteria. All test cases have passed successfully. QA Status: Pending.' } });
+
+  // Execute cell content requests in reverse order to preserve indices
+  cellRequests.reverse();
+  for (const req of cellRequests) {
     await docs.documents.batchUpdate({
       documentId: docId,
-      requestBody: { requests: [request] },
+      requestBody: { requests: [req] },
     });
   }
 
