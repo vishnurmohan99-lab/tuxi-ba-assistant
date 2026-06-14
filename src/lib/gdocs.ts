@@ -67,7 +67,7 @@ function findFeatureHeading(doc: any, featureName: string): number | null {
           .join('')
           .replace(/\n/g, '')
           .trim();
-        if (text.toLowerCase() === featureName.toLowerCase()) {
+        if (text?.toLowerCase() === featureName.toLowerCase()) {
           return element.endIndex;
         }
       }
@@ -166,7 +166,7 @@ export async function appendStoryToDoc(
           .replace(/\n/g, '')
           .trim();
 
-        if (style === 'HEADING_1' && text.toLowerCase() === featureName.toLowerCase()) {
+        if (style === 'HEADING_1' && text?.toLowerCase() === featureName.toLowerCase()) {
           foundFeature = true;
           continue;
         }
