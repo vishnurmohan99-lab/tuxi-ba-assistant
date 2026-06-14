@@ -1,5 +1,13 @@
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
-const MODEL = 'google/gemma-3-12b-it:free';
+
+// Multiple free models as fallbacks
+const FREE_MODELS = [
+  'meta-llama/llama-4-scout:free',
+  'mistralai/mistral-small-3.2-24b-instruct:free',
+  'qwen/qwen3-14b:free',
+  'microsoft/mai-ds-r1:free',
+  'tngtech/deepseek-r1t-chimera:free',
+];
 
 const SYSTEM_PROMPT = `You are a Senior Business Analyst for the Tuxi platform.
 
@@ -57,30 +65,45 @@ Output Rules:
 - Separate multiple user stories with: ===STORY_BREAK===`;
 
 export async function generateUserStories(userPrompt: string): Promise<string> {
-  const response = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://tuxi-ba-assistant.vercel.app',
-      'X-Title': 'Tuxi BA Assistant',
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.3,
-      max_tokens: 4000,
-    }),
-  });
+  let lastError = '';
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`OpenRouter error: ${err}`);
+  for (const model of FREE_MODELS) {
+    try {
+      const response = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://tuxi-ba-assistant.vercel.app',
+          'X-Title': 'Tuxi BA Assistant',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 4000,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        lastError = err;
+        console.warn(`Model ${model} failed:`, err);
+        continue; // try next model
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content;
+
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : 'Unknown error';
+      console.warn(`Model ${model} threw error:`, lastError);
+      continue;
+    }
   }
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+  throw new Error(`All free models failed. Last error: ${lastError}`);
 }
