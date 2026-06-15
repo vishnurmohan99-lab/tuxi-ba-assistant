@@ -173,7 +173,7 @@ export default function SettingsPage() {
         <div style={{ fontWeight: '600', marginBottom: '8px' }}>AI Model</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: '14px', color: 'var(--text-dim)' }}>Google Gemini · gemini-1.5-flash</div>
+            <div style={{ fontSize: '14px', color: 'var(--text-dim)' }}>Google Gemini · gemini-2.0-flash</div>
             <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Fast and capable multimodal model by Google</div>
           </div>
           <span className="badge badge-saved">Active</span>
