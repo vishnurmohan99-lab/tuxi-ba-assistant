@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 
-const SHEET_NAME = 'Tuxi User Stories';
+const SHEET_NAME = 'BAflow User Stories';
 const CONTEXT_SHEET = 'Project Context';
 
 function getAuth() {
@@ -68,7 +68,7 @@ export async function updateStory(feature: string, title: string, newStory: stri
 
 // ── Test Cases ───────────────────────────────────────────────
 
-const TEST_SHEET = 'Tuxi Test Cases';
+const TEST_SHEET = 'BAflow Test Cases';
 
 export async function ensureTestSheet() {
   const sheets = await getSheets();

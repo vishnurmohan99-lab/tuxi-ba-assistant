@@ -18,7 +18,7 @@ function getAuth() {
 export async function getOrCreateDoc(): Promise<string> {
   const auth = getAuth();
   const drive = google.drive({ version: 'v3', auth });
-  const DOC_NAME = 'Tuxi BA - User Stories';
+  const DOC_NAME = 'BAflow - User Stories';
 
   const search = await drive.files.list({
     q: `name='${DOC_NAME}' and mimeType='application/vnd.google-apps.document' and '${FOLDER_ID}' in parents and trashed=false`,

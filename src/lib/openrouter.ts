@@ -102,8 +102,8 @@ ${userPrompt}`
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://tuxi-ba-assistant.vercel.app',
-          'X-Title': 'Tuxi BA Assistant',
+          'HTTP-Referer': 'https://baflow.vercel.app',
+          'X-Title': 'BAflow',
         },
         body: JSON.stringify({
           model,
@@ -214,8 +214,8 @@ ${userStory}`;
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://tuxi-ba-assistant.vercel.app',
-          'X-Title': 'Tuxi BA Assistant',
+          'HTTP-Referer': 'https://baflow.vercel.app',
+          'X-Title': 'BAflow',
         },
         body: JSON.stringify({
           model,
