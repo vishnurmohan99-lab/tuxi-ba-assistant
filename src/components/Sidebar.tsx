@@ -169,6 +169,9 @@ export default function Sidebar() {
       <div style={{
         padding: '12px 16px 16px',
         borderTop: '1px solid rgba(255,255,255,0.07)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px',
       }}>
         <div style={{
           padding: '11px 14px',
@@ -192,6 +195,47 @@ export default function Sidebar() {
             5-model fallback active
           </div>
         </div>
+
+        {/* Logout */}
+        <form action="/api/auth/logout" method="POST">
+          <button
+            type="submit"
+            style={{
+              width: '100%',
+              padding: '9px 14px',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.10)',
+              borderRadius: '9px',
+              color: 'rgba(255,255,255,0.45)',
+              fontSize: '12.5px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.18s',
+            }}
+            onMouseEnter={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.background = 'rgba(239,68,68,0.12)';
+              el.style.borderColor = 'rgba(239,68,68,0.30)';
+              el.style.color = '#fca5a5';
+            }}
+            onMouseLeave={(e) => {
+              const el = e.currentTarget as HTMLElement;
+              el.style.background = 'transparent';
+              el.style.borderColor = 'rgba(255,255,255,0.10)';
+              el.style.color = 'rgba(255,255,255,0.45)';
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+              <polyline points="16 17 21 12 16 7"/>
+              <line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+            Sign out
+          </button>
+        </form>
       </div>
     </aside>
   );

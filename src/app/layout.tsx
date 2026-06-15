@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import Sidebar from '@/components/Sidebar';
+import AppShell from '@/components/AppShell';
 
 export const metadata: Metadata = {
   title: 'BAflow — BA Automation',
@@ -23,10 +23,7 @@ export default function RootLayout({
         />
       </head>
       <body>
-        <div style={{ display: 'flex', minHeight: '100vh' }}>
-          <Sidebar />
-          <main style={{ flex: 1, marginLeft: '240px' }}>{children}</main>
-        </div>
+        <AppShell>{children}</AppShell>
       </body>
     </html>
   );
