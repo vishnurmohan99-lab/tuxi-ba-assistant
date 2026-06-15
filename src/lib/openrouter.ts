@@ -1,4 +1,12 @@
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
+
+const FREE_MODELS = [
+  'openrouter/owl-alpha',
+  'openai/gpt-oss-120b:free',
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'google/gemma-4-31b-it:free',
+  'moonshotai/kimi-k2.6:free',
+];
 
 const SYSTEM_PROMPT = `You are a Senior Business Analyst for the BAflow platform.
 
@@ -58,38 +66,12 @@ Output Rules:
 - Generate clean business documentation suitable for Product, Development and QA teams
 - Separate multiple user stories with: ===STORY_BREAK===`;
 
-async function callGemini(systemInstruction: string, userPrompt: string, maxTokens: number): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY environment variable is not set');
-
-  const response = await fetch(`${GEMINI_BASE}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: maxTokens,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Gemini API error: ${err}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini API');
-  return text;
-}
-
 export async function generateUserStories(
   userPrompt: string,
   pdfText?: string
 ): Promise<string> {
+  let lastError = '';
+
   const fullPrompt = pdfText
     ? `REFERENCE DOCUMENT — EXISTING USER STORIES:
 The following are real user stories already written for this project.
@@ -111,7 +93,45 @@ NOW COMPLETE THIS REQUEST using the reference style above:
 ${userPrompt}`
     : userPrompt;
 
-  return callGemini(SYSTEM_PROMPT, fullPrompt, 4000);
+  for (const model of FREE_MODELS) {
+    try {
+      const response = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://baflow.vercel.app',
+          'X-Title': 'BAflow',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'user', content: fullPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 4000,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        lastError = err;
+        console.warn(`Model ${model} failed:`, err);
+        continue;
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content;
+
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : 'Unknown error';
+      console.warn(`Model ${model} threw error:`, lastError);
+      continue;
+    }
+  }
+
+  throw new Error(`All free models failed. Last error: ${lastError}`);
 }
 
 const TEST_CASE_PROMPT = `You are a Senior QA Engineer for the BAflow platform.
@@ -162,6 +182,8 @@ Output Rules:
 - Generate minimum 10 test cases, more if the story warrants it`;
 
 export async function generateTestCases(userStory: string, pdfText?: string): Promise<string> {
+  let lastError = '';
+
   const fullPrompt = pdfText
     ? `REFERENCE DOCUMENT — EXISTING USER STORIES:
 Use the style, terminology, and vocabulary from these reference stories when writing test cases.
@@ -183,5 +205,40 @@ Do not stop early — be thorough.
 USER STORY:
 ${userStory}`;
 
-  return callGemini(TEST_CASE_PROMPT, fullPrompt, 8000);
+  for (const model of FREE_MODELS) {
+    try {
+      const response = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://baflow.vercel.app',
+          'X-Title': 'BAflow',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: TEST_CASE_PROMPT },
+            { role: 'user', content: fullPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 8000,
+        }),
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        lastError = err;
+        continue;
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : 'Unknown error';
+      continue;
+    }
+  }
+
+  throw new Error(`All free models failed. Last error: ${lastError}`);
 }

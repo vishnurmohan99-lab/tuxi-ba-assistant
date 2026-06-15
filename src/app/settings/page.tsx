@@ -80,7 +80,7 @@ export default function SettingsPage() {
   }
 
   const envVars = [
-    { key: 'GEMINI_API_KEY', desc: 'Your Google Gemini API key.', hint: 'Get from aistudio.google.com/app/apikey' },
+    { key: 'OPENROUTER_API_KEY', desc: 'Your OpenRouter API key.', hint: 'Get from openrouter.ai/keys' },
     { key: 'GOOGLE_SHEET_ID', desc: 'The ID of your Google Sheet.', hint: 'Found in the sheet URL: /spreadsheets/d/{SHEET_ID}/edit' },
     { key: 'GOOGLE_CLIENT_EMAIL', desc: 'Service account email from your JSON credentials.', hint: 'Ends with @...iam.gserviceaccount.com' },
     { key: 'GOOGLE_PRIVATE_KEY', desc: 'Private key from your service account JSON.', hint: 'Include the full key with BEGIN/END headers.' },
@@ -173,8 +173,8 @@ export default function SettingsPage() {
         <div style={{ fontWeight: '600', marginBottom: '8px' }}>AI Model</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontSize: '14px', color: 'var(--text-dim)' }}>Google Gemini · gemini-2.0-flash</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Fast and capable multimodal model by Google</div>
+            <div style={{ fontSize: '14px', color: 'var(--text-dim)' }}>OpenRouter · Free model fallback system</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Tries 5 models automatically until one responds</div>
           </div>
           <span className="badge badge-saved">Active</span>
         </div>

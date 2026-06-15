@@ -67,7 +67,7 @@ const cards = [
 ];
 
 const stats = [
-  { label: 'AI Engine', value: 'Gemini Flash', sub: 'gemini-2.0-flash', icon: '⚡' },
+  { label: 'AI Engine', value: 'OpenRouter', sub: '5-model fallback', icon: '⚡' },
   { label: 'Storage', value: 'Google Docs', sub: 'Auto-organised', icon: '📄' },
   { label: 'Test Cases', value: 'Google Sheets', sub: '9-column structure', icon: '🧪' },
   { label: 'Format', value: 'BA Standard', sub: 'Context-aware', icon: '✦' },
